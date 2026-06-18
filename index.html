@@ -140,6 +140,27 @@
     cursor: pointer; font-size: 16px;
   }
   .controls button:hover { background: #2b3543; }
+  .live-bar {
+    position: absolute; left: 12px; bottom: 12px; z-index: 5;
+    display: flex; align-items: center; gap: 6px;
+    background: #1b212bdd; border: 1px solid var(--border);
+    border-radius: 10px; padding: 6px 12px; font-size: 12px; color: var(--text);
+  }
+  .live-bar button {
+    width: 30px; height: 30px; border-radius: 7px; cursor: pointer;
+    background: #2b3543; color: var(--text); border: 1px solid var(--border); font-size: 13px;
+  }
+  .live-bar label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .live-bar input[type=range] { width: 90px; }
+  .live-dot {
+    width: 9px; height: 9px; border-radius: 50%; background: #36d07a;
+    box-shadow: 0 0 0 0 #36d07a99; animation: pulse 1.6s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 #36d07a99; }
+    70% { box-shadow: 0 0 0 7px #36d07a00; }
+    100% { box-shadow: 0 0 0 0 #36d07a00; }
+  }
   @media (max-width: 1000px) {
     .info { display: none; }
     aside { width: 220px; }
@@ -171,6 +192,13 @@
       <button id="zoomIn" title="Vergrößern">+</button>
       <button id="zoomOut" title="Verkleinern">−</button>
       <button id="zoomReset" title="Zurücksetzen">⟳</button>
+    </div>
+    <div class="live-bar">
+      <button id="playPause" title="Start / Pause">⏸︎</button>
+      <span class="live-dot"></span><span id="liveLabel">Live-Züge</span>
+      <label style="margin-left:10px;">Tempo
+        <input id="speed" type="range" min="0.3" max="4" step="0.1" value="1.2">
+      </label>
     </div>
     <svg id="map" viewBox="0 0 1000 720" preserveAspectRatio="xMidYMid meet"></svg>
     <div id="tooltip"></div>
@@ -400,6 +428,11 @@ function render() {
   });
   svg.appendChild(stationLayer);
   svg.appendChild(labelLayer);
+
+  // Ebene für die fahrenden Züge (immer obenauf)
+  trainLayer = el("g", { id:"trainLayer" });
+  svg.appendChild(trainLayer);
+  mountTrainEls();
 }
 
 /* ---------- Tooltip ---------- */
@@ -441,9 +474,100 @@ function selectLine(id) {
     const idx = LINES.findIndex(l => l.id === id);
     lineButtons.children[idx].classList.add("active");
   }
-  render();
+  buildTrains();   // Zugfahrten für die sichtbare(n) Linie(n) erzeugen
+  render();        // render() hängt die Zug-Ebene an und mountet die Züge
   renderInfo(id);
+  document.getElementById("liveLabel").textContent =
+    id ? `Live-Züge · Linie ${id}` : "Live-Züge · alle Linien";
 }
+
+/* ----------------------------------------------------------------------
+   Live-Zug-Simulation
+   Züge fahren entlang der Liniensegmente, halten kurz an jeder Station
+   und wenden an den Endbahnhöfen – in beide Richtungen, im realistischen
+   Takt. (Simulation, keine echten GPS-Daten der BVG.)
+---------------------------------------------------------------------- */
+let trains = [];
+let trainLayer = null;
+let running = true;
+let speedMult = 1.2;
+const DWELL = 0.4;          // Haltezeit an Stationen (Sek., bei Tempo 1)
+const BASE_SPEED = 34;      // Einheiten pro Sekunde
+
+function buildTrains() {
+  trains = [];
+  const ids = activeLine ? [activeLine] : LINES.map(l => l.id);
+  ids.forEach(id => {
+    const line = LINES.find(l => l.id === id);
+    const pts = line.stations.map(s => STATIONS[s]).filter(Boolean);
+    const segs = []; let tot = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const ax=pts[i][0], ay=pts[i][1], bx=pts[i+1][0], by=pts[i+1][1];
+      const len = Math.hypot(bx-ax, by-ay) || 0.001;
+      segs.push({ ax, ay, bx, by, len }); tot += len;
+    }
+    if (!segs.length) return;
+    const count = Math.max(2, Math.round(tot / 150));
+    for (let k = 0; k < count; k++) {
+      const dir = k % 2 === 0 ? 1 : -1;
+      let acc = (k / count) * tot, segIdx = 0;
+      while (segIdx < segs.length - 1 && acc > segs[segIdx].len) { acc -= segs[segIdx].len; segIdx++; }
+      const t = Math.min(1, acc / segs[segIdx].len);
+      trains.push({ lineId:id, color:line.color, segs, segIdx, t, dir, state:"move", timer:0 });
+    }
+  });
+}
+
+function mountTrainEls() {
+  if (!trainLayer) return;
+  trains.forEach(tr => {
+    const g = el("g", { class:"train" });
+    g.appendChild(el("circle", { r:6, fill:"#fff", stroke:"#0e1219", "stroke-width":1.5 }));
+    g.appendChild(el("circle", { r:4, fill: tr.color }));
+    tr.el = g;
+    positionTrain(tr);
+    trainLayer.appendChild(g);
+  });
+}
+
+function positionTrain(tr) {
+  const s = tr.segs[tr.segIdx];
+  const x = s.ax + (s.bx - s.ax) * tr.t;
+  const y = s.ay + (s.by - s.ay) * tr.t;
+  if (tr.el) tr.el.setAttribute("transform", `translate(${x.toFixed(2)},${y.toFixed(2)})`);
+}
+
+function updateTrain(tr, dt) {
+  if (tr.state === "dwell") { tr.timer -= dt; if (tr.timer <= 0) tr.state = "move"; return; }
+  const seg = tr.segs[tr.segIdx];
+  tr.t += tr.dir * (BASE_SPEED * dt / seg.len);
+  if (tr.dir > 0 && tr.t >= 1) {            // Station am Segmentende erreicht
+    tr.t = 1; tr.state = "dwell"; tr.timer = DWELL;
+    if (tr.segIdx < tr.segs.length - 1) { tr.segIdx++; tr.t = 0; }
+    else tr.dir = -1;                       // Endbahnhof → wenden
+  } else if (tr.dir < 0 && tr.t <= 0) {
+    tr.t = 0; tr.state = "dwell"; tr.timer = DWELL;
+    if (tr.segIdx > 0) { tr.segIdx--; tr.t = 1; }
+    else tr.dir = 1;                        // Endbahnhof → wenden
+  }
+}
+
+let lastTs = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - lastTs) / 1000); lastTs = now;
+  if (running) trains.forEach(tr => updateTrain(tr, dt * speedMult));
+  trains.forEach(positionTrain);
+  requestAnimationFrame(frame);
+}
+
+/* Steuerung */
+document.getElementById("playPause").addEventListener("click", e => {
+  running = !running;
+  e.currentTarget.textContent = running ? "⏸︎" : "▶︎";
+});
+document.getElementById("speed").addEventListener("input", e => {
+  speedMult = parseFloat(e.target.value);
+});
 
 /* ---------- Info-Panel ---------- */
 const info = document.getElementById("info");
@@ -506,8 +630,8 @@ window.addEventListener("mousemove", e => {
 });
 
 /* ---------- Start ---------- */
-render();
-renderInfo(null);
+selectLine("U6");                 // erst eine Linie zeigen – mit fahrenden Zügen
+requestAnimationFrame(frame);     // Live-Animation starten
 </script>
 </body>
 </html>
