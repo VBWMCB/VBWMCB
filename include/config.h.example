@@ -24,3 +24,8 @@
 // ---- Alerts (on a new lead) -----------------------------------------------
 #define ENABLE_BEEP        1     // 1 = short beep on the onboard speaker (GPIO26)
 #define ENABLE_LED         1     // 1 = flash the onboard RGB LED green
+
+// ---- Stability / diagnostics ----------------------------------------------
+#define DISABLE_BROWNOUT   1     // 1 = disable brownout detector (fixes reset
+                                 //     loops caused by weak USB power/cables)
+#define DEBUG_SERIAL       1     // 1 = verbose logs over serial @115200

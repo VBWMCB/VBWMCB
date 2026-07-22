@@ -19,8 +19,22 @@
 #include <SPI.h>
 #include <TFT_eSPI.h>
 #include <XPT2046_Touchscreen.h>
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+#include "esp_system.h"
 
 #include "config.h"
+
+// ---------------------------------------------------------------------------
+//  Debug logging (toggled by DEBUG_SERIAL in config.h)
+// ---------------------------------------------------------------------------
+#if DEBUG_SERIAL
+  #define DBG(x)     Serial.println(x)
+  #define DBGF(...)  Serial.printf(__VA_ARGS__)
+#else
+  #define DBG(x)
+  #define DBGF(...)
+#endif
 
 // ---------------------------------------------------------------------------
 //  Board peripherals (fixed CYD wiring)
@@ -89,6 +103,20 @@ static void alertNewLead() {
   delay(250);
 #endif
   ledGreen(false);
+}
+
+static const char *resetReasonStr() {
+  switch (esp_reset_reason()) {
+    case ESP_RST_POWERON:   return "POWERON (normal)";
+    case ESP_RST_SW:        return "SW";
+    case ESP_RST_PANIC:     return "PANIC (code crash!)";
+    case ESP_RST_INT_WDT:   return "INT_WDT (watchdog)";
+    case ESP_RST_TASK_WDT:  return "TASK_WDT (watchdog)";
+    case ESP_RST_WDT:       return "WDT (watchdog)";
+    case ESP_RST_BROWNOUT:  return "BROWNOUT (power too weak!)";
+    case ESP_RST_DEEPSLEEP: return "DEEPSLEEP";
+    default:                return "OTHER";
+  }
 }
 
 static String nowClock() {
@@ -200,6 +228,7 @@ static void storeLead(JsonObject msg, bool announce) {
   if (histFilled < LEAD_HISTORY) histFilled++;
   totalLeads++;
 
+  DBGF("[LEAD #%ld] %s: %s\n", totalLeads, l.name.c_str(), l.text.c_str());
   if (announce) {
     viewOffset = 0;
     drawLead(0);
@@ -222,7 +251,11 @@ static int telegramPoll(bool announce) {
 
   if (!http.begin(client, url)) return 0;
   int code = http.GET();
-  if (code != 200) { http.end(); return 0; }
+  if (code != 200) {
+    DBGF("[TG] getUpdates HTTP %d | heap %u\n", code, (unsigned)ESP.getFreeHeap());
+    http.end();
+    return 0;
+  }
 
   JsonDocument doc;
   DeserializationError err = deserializeJson(doc, http.getStream());
@@ -255,13 +288,25 @@ static void connectWiFi() {
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   unsigned long start = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - start < 20000) delay(300);
+
+  if (WiFi.status() == WL_CONNECTED)
+    DBGF("[WiFi] connected: %s | heap: %u\n",
+         WiFi.localIP().toString().c_str(), (unsigned)ESP.getFreeHeap());
+  else
+    DBG("[WiFi] FAILED (check 2.4GHz SSID/password)");
 }
 
 // ---------------------------------------------------------------------------
 //  Setup / loop
 // ---------------------------------------------------------------------------
 void setup() {
+#if DISABLE_BROWNOUT
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);   // stop weak-USB-power reset loops
+#endif
   Serial.begin(115200);
+  delay(200);
+  DBGF("\n[Vollblut CYD] boot | last reset: %s | free heap: %u bytes\n",
+       resetReasonStr(), (unsigned)ESP.getFreeHeap());
 
 #if ENABLE_LED
   pinMode(LED_R, OUTPUT); pinMode(LED_G, OUTPUT); pinMode(LED_B, OUTPUT);
