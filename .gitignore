@@ -6,6 +6,9 @@
 *.bin
 *.elf
 
+# Secrets — real config with the bot token must NEVER be committed
+include/config.h
+
 # OS
 .DS_Store
 Thumbs.db

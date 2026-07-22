@@ -1,0 +1,26 @@
+// ===========================================================================
+//  config.h  —  COPY THIS FILE TO  include/config.h  AND FILL IN YOUR VALUES
+//
+//     cp include/config.h.example include/config.h
+//
+//  include/config.h is git-ignored so your bot token never lands in the repo.
+// ===========================================================================
+#pragma once
+
+// ---- WiFi -----------------------------------------------------------------
+#define WIFI_SSID      "YOUR_WIFI_SSID"
+#define WIFI_PASSWORD  "YOUR_WIFI_PASSWORD"
+
+// ---- Telegram bot ---------------------------------------------------------
+//  Token for @vollblutclaudeBot from @BotFather (looks like 123456789:AAF...).
+//  Every message this bot receives is treated as a new lead and shown here.
+#define TELEGRAM_BOT_TOKEN  "PASTE_YOUR_BOT_TOKEN_HERE"
+
+// ---- Behaviour ------------------------------------------------------------
+#define POLL_TIMEOUT_S    20     // Telegram long-poll timeout (seconds)
+#define GMT_OFFSET_HOURS   2     // clock offset: Germany = 2 (summer) / 1 (winter)
+#define LEAD_HISTORY      12     // how many recent leads to keep for scroll-back
+
+// ---- Alerts (on a new lead) -----------------------------------------------
+#define ENABLE_BEEP        1     // 1 = short beep on the onboard speaker (GPIO26)
+#define ENABLE_LED         1     // 1 = flash the onboard RGB LED green
