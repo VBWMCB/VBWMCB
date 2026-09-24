@@ -43,7 +43,8 @@ fi
 echo "== 4/6  ESP32-Port finden =="
 PORT="${1:-}"
 if [ -z "$PORT" ]; then
-  PORT="$(arduino-cli board list | awk '/serial/{print $1; exit}')"
+  # echten USB-seriellen Port waehlen (Bluetooth/debug ausschliessen)
+  PORT="$(ls /dev/cu.* 2>/dev/null | grep -Ei 'usbserial|usbmodem|wchusbserial|SLAB' | head -n1 || true)"
 fi
 if [ -z "$PORT" ]; then
   echo "FEHLER: keinen ESP32-Port gefunden. Stecker pruefen, oder Port angeben:"
