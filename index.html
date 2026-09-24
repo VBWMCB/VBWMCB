@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Berliner U-Bahn – Netzplan</title>
+<style>
+  :root {
+    --bg: #11151c;
+    --panel: #1b212b;
+    --panel-2: #232b37;
+    --text: #e8edf4;
+    --muted: #97a3b4;
+    --border: #2e3744;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+  header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 20px; margin: 0; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  .layout { display: flex; flex: 1; min-height: 0; }
+  aside {
+    width: 290px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 16px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .section-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    margin: 4px 0 10px;
+  }
+  .lines { display: flex; flex-direction: column; gap: 6px; }
+  .line-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+    font-size: 13px;
+    transition: background .15s, border-color .15s;
+  }
+  .line-btn:hover { background: #2b3543; }
+  .line-btn.active { border-color: #6da0ff; background: #2b3543; }
+  .badge {
+    width: 30px; height: 24px;
+    border-radius: 5px;
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    text-shadow: 0 1px 2px rgba(0,0,0,.35);
+  }
+  .line-route { color: var(--muted); font-size: 11.5px; line-height: 1.3; }
+  .line-name { font-weight: 600; }
+
+  main { flex: 1; position: relative; min-width: 0; background: radial-gradient(circle at 50% 30%, #161c25, #0e1219); }
+  #map { width: 100%; height: 100%; display: block; cursor: grab; }
+  #map.dragging { cursor: grabbing; }
+
+  .info {
+    width: 320px;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    padding: 16px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .info h2 { margin: 0 0 4px; font-size: 16px; display: flex; align-items: center; gap: 10px; }
+  .info .endpoints { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .info .endpoints b { color: var(--text); }
+  .station-list { list-style: none; margin: 0; padding: 0; }
+  .station-list li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 5px 0; font-size: 13px;
+    border-bottom: 1px solid rgba(255,255,255,.04);
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; border: 2px solid #fff; }
+  .interchange-tag {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--muted);
+    display: flex; gap: 3px;
+  }
+  .mini-badge {
+    width: 16px; height: 14px; border-radius: 3px; color: #fff;
+    font-size: 9px; font-weight: 700; display: inline-flex;
+    align-items: center; justify-content: center;
+  }
+  .hint { color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+  #tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: #000d;
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    display: none;
+    max-width: 220px;
+    z-index: 10;
+  }
+  #tooltip .tt-lines { display: flex; gap: 3px; margin-top: 4px; flex-wrap: wrap; }
+  .controls { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; z-index: 5; }
+  .controls button {
+    width: 34px; height: 34px;
+    background: #1b212bdd; color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    cursor: pointer; font-size: 16px;
+  }
+  .controls button:hover { background: #2b3543; }
+  .live-bar {
+    position: absolute; left: 12px; bottom: 12px; z-index: 5;
+    display: flex; align-items: center; gap: 6px;
+    background: #1b212bdd; border: 1px solid var(--border);
+    border-radius: 10px; padding: 6px 12px; font-size: 12px; color: var(--text);
+  }
+  .live-bar button {
+    width: 30px; height: 30px; border-radius: 7px; cursor: pointer;
+    background: #2b3543; color: var(--text); border: 1px solid var(--border); font-size: 13px;
+  }
+  .live-bar label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .live-bar input[type=range] { width: 90px; }
+  .live-dot {
+    width: 9px; height: 9px; border-radius: 50%; background: #36d07a;
+    box-shadow: 0 0 0 0 #36d07a99; animation: pulse 1.6s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 #36d07a99; }
+    70% { box-shadow: 0 0 0 7px #36d07a00; }
+    100% { box-shadow: 0 0 0 0 #36d07a00; }
+  }
+  @media (max-width: 1000px) {
+    .info { display: none; }
+    aside { width: 220px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>🚇 Berliner U-Bahn</h1>
+  <p>Schematischer Netzplan – wähle eine Linie, um zu sehen, wohin sie fährt. Stationen anklicken/überfahren für Details.</p>
+</header>
+<div class="layout">
+  <aside>
+    <div class="section-title">Linien</div>
+    <div class="lines" id="lineButtons"></div>
+    <button class="line-btn active" id="showAll" style="margin-top:10px; justify-content:center; font-weight:600;">Alle Linien anzeigen</button>
+    <div class="section-title" style="margin-top:22px;">Legende</div>
+    <div class="hint">
+      <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid #111;vertical-align:middle;"></span>
+      Umsteigebahnhof (mehrere Linien)<br>
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#888;vertical-align:middle;margin-top:6px;"></span>
+      Normale Station<br><br>
+      Stand: aktuelles Netz inkl. U5-Verlängerung zum Hauptbahnhof.
+    </div>
+  </aside>
+
+  <main>
+    <div class="controls">
+      <button id="zoomIn" title="Vergrößern">+</button>
+      <button id="zoomOut" title="Verkleinern">−</button>
+      <button id="zoomReset" title="Zurücksetzen">⟳</button>
+    </div>
+    <div class="live-bar">
+      <button id="playPause" title="Start / Pause">⏸︎</button>
+      <span class="live-dot"></span><span id="liveLabel">Live-Züge</span>
+      <label style="margin-left:10px;">Tempo
+        <input id="speed" type="range" min="0.3" max="4" step="0.1" value="1.2">
+      </label>
+    </div>
+    <svg id="map" viewBox="0 0 1000 720" preserveAspectRatio="xMidYMid meet"></svg>
+    <div id="tooltip"></div>
+  </main>
+
+  <div class="info" id="info">
+    <p class="hint">Klicke links auf eine Linie, um ihren Verlauf und alle Stationen zu sehen.</p>
+  </div>
+</div>
+
+<script>
+/* ----------------------------------------------------------------------
+   Datenmodell
+   STATIONS: Name -> [x, y] in einem schematischen Koordinatensystem
+             (x: West→Ost, y: Nord→Süd). Umsteigebahnhöfe sind genau
+             einmal definiert, damit die Linien sich dort treffen.
+   LINES:    geordnete Stationsliste je Linie + offizielle BVG-Farbe.
+---------------------------------------------------------------------- */
+const STATIONS = {
+  // --- U1 / U3 gemeinsamer Ostast & U1 West ---
+  "Uhlandstraße":[330,372],"Kurfürstendamm":[345,374],"Wittenbergplatz":[380,370],
+  "Nollendorfplatz":[405,382],"Kurfürstenstraße":[440,388],"Gleisdreieck":[470,392],
+  "Möckernbrücke":[480,412],"Hallesches Tor":[510,405],"Prinzenstraße":[545,406],
+  "Kottbusser Tor":[590,408],"Görlitzer Bahnhof":[635,398],"Schlesisches Tor":[670,388],
+  "Warschauer Straße":[700,380],
+  // --- U2 ---
+  "Ruhleben":[160,322],"Olympia-Stadion":[188,324],"Neu-Westend":[214,328],
+  "Theodor-Heuss-Platz":[240,332],"Kaiserdamm":[266,336],"Sophie-Charlotte-Platz":[290,338],
+  "Bismarckstraße":[315,340],"Deutsche Oper":[330,341],"Ernst-Reuter-Platz":[345,342],
+  "Zoologischer Garten":[360,344],"Bülowstraße":[425,398],
+  "Mendelssohn-Bartholdy-Park":[488,378],"Potsdamer Platz":[505,366],"Mohrenstraße":[516,358],
+  "Stadtmitte":[527,360],"Hausvogteiplatz":[545,350],"Spittelmarkt":[562,344],
+  "Märkisches Museum":[582,332],"Klosterstraße":[600,318],"Alexanderplatz":[620,300],
+  "Rosa-Luxemburg-Platz":[617,268],"Senefelderplatz":[614,240],"Eberswalder Straße":[620,212],
+  "Schönhauser Allee":[630,188],"Vinetastraße":[636,168],"Pankow":[642,150],
+  // --- U3 West ---
+  "Krumme Lanke":[225,560],"Onkel Toms Hütte":[240,543],"Oskar-Helene-Heim":[255,526],
+  "Freie Universität (Thielplatz)":[268,510],"Dahlem-Dorf":[280,495],"Podbielskiallee":[292,480],
+  "Breitenbachplatz":[303,465],"Rüdesheimer Platz":[312,450],"Heidelberger Platz":[318,436],
+  "Fehrbelliner Platz":[305,420],"Hohenzollernplatz":[328,410],"Spichernstraße":[350,400],
+  "Augsburger Straße":[368,386],
+  // --- U4 ---
+  "Viktoria-Luise-Platz":[400,408],"Bayerischer Platz":[388,435],"Rathaus Schöneberg":[392,455],
+  "Innsbrucker Platz":[400,474],
+  // --- U5 ---
+  "Hauptbahnhof":[500,278],"Bundestag":[508,294],"Brandenburger Tor":[510,316],
+  "Unter den Linden":[520,338],"Museumsinsel":[548,324],"Rotes Rathaus":[582,310],
+  "Schillingstraße":[645,300],"Strausberger Platz":[665,300],"Weberwiese":[682,302],
+  "Frankfurter Tor":[700,300],"Samariterstraße":[718,300],"Frankfurter Allee":[735,302],
+  "Magdalenenstraße":[752,304],"Lichtenberg":[768,306],"Friedrichsfelde":[785,306],
+  "Tierpark":[802,310],"Biesdorf-Süd":[820,300],"Elsterwerdaer Platz":[840,290],
+  "Wuhletal":[858,280],"Kaulsdorf-Nord":[875,268],"Kienberg (Gärten der Welt)":[890,256],
+  "Hellersdorf":[905,244],"Louis-Lewin-Straße":[918,234],"Cottbusser Platz":[930,226],
+  "Hönow":[945,216],
+  // --- U6 ---
+  "Alt-Tegel":[380,118],"Borsigwerke":[388,134],"Holzhauser Straße":[396,150],
+  "Otisstraße":[404,164],"Scharnweberstraße":[412,178],"Kurt-Schumacher-Platz":[420,192],
+  "Afrikanische Straße":[432,212],"Rehberge":[442,228],"Seestraße":[452,243],
+  "Leopoldplatz":[462,258],"Wedding":[472,272],"Reinickendorfer Straße":[482,286],
+  "Schwartzkopffstraße":[492,298],"Naturkundemuseum":[500,310],"Oranienburger Tor":[508,318],
+  "Friedrichstraße":[514,326],"Kochstraße":[530,378],"Platz der Luftbrücke":[510,468],
+  "Paradestraße":[519,494],"Tempelhof":[528,516],"Alt-Tempelhof":[532,536],
+  "Kaiserin-Augusta-Straße":[536,553],"Ullsteinstraße":[540,566],"Westphalweg":[544,577],
+  "Alt-Mariendorf":[548,590],
+  // --- U7 ---
+  "Rathaus Spandau":[88,250],"Altstadt Spandau":[102,258],"Zitadelle":[116,266],
+  "Haselhorst":[132,272],"Paulsternstraße":[148,278],"Rohrdamm":[162,286],
+  "Siemensdamm":[178,292],"Halemweg":[192,300],"Jakob-Kaiser-Platz":[206,308],
+  "Jungfernheide":[222,316],"Mierendorffplatz":[238,326],"Richard-Wagner-Platz":[280,338],
+  "Wilmersdorfer Straße":[308,358],"Adenauerplatz":[318,375],"Konstanzer Straße":[308,395],
+  "Blissestraße":[322,438],"Berliner Straße":[345,448],"Eisenacher Straße":[412,442],
+  "Kleistpark":[432,440],"Yorckstraße":[456,432],"Gneisenaustraße":[525,452],
+  "Südstern":[552,458],"Hermannplatz":[588,470],"Rathaus Neukölln":[605,485],
+  "Karl-Marx-Straße":[618,500],"Neukölln":[630,514],"Grenzallee":[647,524],
+  "Blaschkoallee":[662,532],"Parchimer Allee":[677,538],"Britz-Süd":[692,544],
+  "Johannisthaler Chaussee":[707,550],"Lipschitzallee":[722,554],"Wutzkyallee":[737,558],
+  "Zwickauer Damm":[750,560],"Rudow":[764,562],
+  // --- U8 ---
+  "Wittenau":[470,108],"Rathaus Reinickendorf":[478,124],"Karl-Bonhoeffer-Nervenklinik":[486,140],
+  "Lindauer Allee":[494,156],"Paracelsus-Bad":[502,170],"Residenzstraße":[512,184],
+  "Franz-Neumann-Platz":[524,196],"Osloer Straße":[535,210],"Pankstraße":[548,228],
+  "Gesundbrunnen":[560,244],"Voltastraße":[572,262],"Bernauer Straße":[584,280],
+  "Rosenthaler Platz":[598,294],"Weinmeisterstraße":[609,300],"Jannowitzbrücke":[625,320],
+  "Heinrich-Heine-Straße":[615,338],"Moritzplatz":[602,378],"Schönleinstraße":[589,432],
+  "Boddinstraße":[595,490],"Leinestraße":[600,508],"Hermannstraße":[605,524],
+  // --- U9 ---
+  "Nauener Platz":[510,232],"Amrumer Straße":[440,278],"Westhafen":[420,296],
+  "Birkenstraße":[400,316],"Turmstraße":[380,332],"Hansaplatz":[350,338],
+  "Güntzelstraße":[345,420],"Bundesplatz":[348,466],"Friedrich-Wilhelm-Platz":[345,484],
+  "Walther-Schreiber-Platz":[342,502],"Schloßstraße":[336,524],"Rathaus Steglitz":[330,548]
+};
+
+const LINES = [
+  { id:"U1", color:"#55A822", stations:[
+    "Uhlandstraße","Kurfürstendamm","Wittenbergplatz","Nollendorfplatz","Kurfürstenstraße",
+    "Gleisdreieck","Möckernbrücke","Hallesches Tor","Prinzenstraße","Kottbusser Tor",
+    "Görlitzer Bahnhof","Schlesisches Tor","Warschauer Straße"]},
+  { id:"U2", color:"#FF3300", stations:[
+    "Ruhleben","Olympia-Stadion","Neu-Westend","Theodor-Heuss-Platz","Kaiserdamm",
+    "Sophie-Charlotte-Platz","Bismarckstraße","Deutsche Oper","Ernst-Reuter-Platz",
+    "Zoologischer Garten","Wittenbergplatz","Nollendorfplatz","Bülowstraße","Gleisdreieck",
+    "Mendelssohn-Bartholdy-Park","Potsdamer Platz","Mohrenstraße","Stadtmitte","Hausvogteiplatz",
+    "Spittelmarkt","Märkisches Museum","Klosterstraße","Alexanderplatz","Rosa-Luxemburg-Platz",
+    "Senefelderplatz","Eberswalder Straße","Schönhauser Allee","Vinetastraße","Pankow"]},
+  { id:"U3", color:"#16683D", stations:[
+    "Krumme Lanke","Onkel Toms Hütte","Oskar-Helene-Heim","Freie Universität (Thielplatz)",
+    "Dahlem-Dorf","Podbielskiallee","Breitenbachplatz","Rüdesheimer Platz","Heidelberger Platz",
+    "Fehrbelliner Platz","Hohenzollernplatz","Spichernstraße","Augsburger Straße","Wittenbergplatz",
+    "Nollendorfplatz","Kurfürstenstraße","Gleisdreieck","Möckernbrücke","Hallesches Tor",
+    "Prinzenstraße","Kottbusser Tor","Görlitzer Bahnhof","Schlesisches Tor","Warschauer Straße"]},
+  { id:"U4", color:"#FFD900", stations:[
+    "Nollendorfplatz","Viktoria-Luise-Platz","Bayerischer Platz","Rathaus Schöneberg","Innsbrucker Platz"]},
+  { id:"U5", color:"#672F17", stations:[
+    "Hauptbahnhof","Bundestag","Brandenburger Tor","Unter den Linden","Museumsinsel","Rotes Rathaus",
+    "Alexanderplatz","Schillingstraße","Strausberger Platz","Weberwiese","Frankfurter Tor",
+    "Samariterstraße","Frankfurter Allee","Magdalenenstraße","Lichtenberg","Friedrichsfelde",
+    "Tierpark","Biesdorf-Süd","Elsterwerdaer Platz","Wuhletal","Kaulsdorf-Nord",
+    "Kienberg (Gärten der Welt)","Hellersdorf","Louis-Lewin-Straße","Cottbusser Platz","Hönow"]},
+  { id:"U6", color:"#8E6DAB", stations:[
+    "Alt-Tegel","Borsigwerke","Holzhauser Straße","Otisstraße","Scharnweberstraße",
+    "Kurt-Schumacher-Platz","Afrikanische Straße","Rehberge","Seestraße","Leopoldplatz",
+    "Wedding","Reinickendorfer Straße","Schwartzkopffstraße","Naturkundemuseum","Oranienburger Tor",
+    "Friedrichstraße","Unter den Linden","Stadtmitte","Kochstraße","Hallesches Tor","Mehringdamm",
+    "Platz der Luftbrücke","Paradestraße","Tempelhof","Alt-Tempelhof","Kaiserin-Augusta-Straße",
+    "Ullsteinstraße","Westphalweg","Alt-Mariendorf"]},
+  { id:"U7", color:"#009BD5", stations:[
+    "Rathaus Spandau","Altstadt Spandau","Zitadelle","Haselhorst","Paulsternstraße","Rohrdamm",
+    "Siemensdamm","Halemweg","Jakob-Kaiser-Platz","Jungfernheide","Mierendorffplatz",
+    "Richard-Wagner-Platz","Bismarckstraße","Wilmersdorfer Straße","Adenauerplatz","Konstanzer Straße",
+    "Fehrbelliner Platz","Blissestraße","Berliner Straße","Bayerischer Platz","Eisenacher Straße",
+    "Kleistpark","Yorckstraße","Möckernbrücke","Mehringdamm","Gneisenaustraße","Südstern",
+    "Hermannplatz","Rathaus Neukölln","Karl-Marx-Straße","Neukölln","Grenzallee","Blaschkoallee",
+    "Parchimer Allee","Britz-Süd","Johannisthaler Chaussee","Lipschitzallee","Wutzkyallee",
+    "Zwickauer Damm","Rudow"]},
+  { id:"U8", color:"#224F86", stations:[
+    "Wittenau","Rathaus Reinickendorf","Karl-Bonhoeffer-Nervenklinik","Lindauer Allee","Paracelsus-Bad",
+    "Residenzstraße","Franz-Neumann-Platz","Osloer Straße","Pankstraße","Gesundbrunnen","Voltastraße",
+    "Bernauer Straße","Rosenthaler Platz","Weinmeisterstraße","Alexanderplatz","Jannowitzbrücke",
+    "Heinrich-Heine-Straße","Moritzplatz","Kottbusser Tor","Schönleinstraße","Hermannplatz",
+    "Boddinstraße","Leinestraße","Hermannstraße"]},
+  { id:"U9", color:"#FF7300", stations:[
+    "Osloer Straße","Nauener Platz","Leopoldplatz","Amrumer Straße","Westhafen","Birkenstraße",
+    "Turmstraße","Hansaplatz","Zoologischer Garten","Kurfürstendamm","Spichernstraße","Güntzelstraße",
+    "Berliner Straße","Bundesplatz","Friedrich-Wilhelm-Platz","Walther-Schreiber-Platz","Schloßstraße",
+    "Rathaus Steglitz"]}
+];
+
+/* Mehringdamm fehlt noch in STATIONS -> ergänzen (U6/U7 Umstieg) */
+STATIONS["Mehringdamm"] = [500,438];
+
+/* ---------- Hilfsstrukturen ---------- */
+const colorOf = {}; LINES.forEach(l => colorOf[l.id] = l.color);
+// Welche Linien bedienen welche Station?
+const stationLines = {};
+LINES.forEach(line => line.stations.forEach(s => {
+  (stationLines[s] = stationLines[s] || []).push(line.id);
+}));
+// Datenvalidierung (hilft beim Pflegen der Daten)
+LINES.forEach(l => l.stations.forEach(s => {
+  if (!STATIONS[s]) console.warn("Fehlende Koordinate für Station:", s, "(Linie " + l.id + ")");
+}));
+
+const SVGNS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("map");
+const tooltip = document.getElementById("tooltip");
+let activeLine = null; // null = alle
+
+function el(name, attrs) {
+  const e = document.createElementNS(SVGNS, name);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+function render() {
+  svg.innerHTML = "";
+  const dim = id => activeLine && id !== activeLine ? 0.12 : 1;
+
+  // 1) Linien als Pfade (parallele Linien werden leicht versetzt gezeichnet,
+  //    indem wir pro Linie einen kleinen Offset entlang der Reihenfolge nutzen)
+  const lineLayer = el("g", {});
+  LINES.forEach(line => {
+    const pts = line.stations.map(s => STATIONS[s]).filter(Boolean);
+    let d = "M " + pts.map(p => p[0] + " " + p[1]).join(" L ");
+    const path = el("path", {
+      d, fill:"none", stroke: line.color, "stroke-width": 5,
+      "stroke-linejoin":"round", "stroke-linecap":"round",
+      opacity: dim(line.id), "data-line": line.id
+    });
+    lineLayer.appendChild(path);
+  });
+  svg.appendChild(lineLayer);
+
+  // 2) Stationen
+  const stationLayer = el("g", {});
+  const labelLayer = el("g", {});
+  Object.keys(STATIONS).forEach(name => {
+    const [x,y] = STATIONS[name];
+    const serving = stationLines[name] || [];
+    if (!serving.length) return;
+    const isInterchange = serving.length > 1;
+    const visible = !activeLine || serving.includes(activeLine);
+    const op = visible ? 1 : 0.12;
+
+    const g = el("g", { "data-name": name, style:"cursor:pointer", opacity: op });
+    if (isInterchange) {
+      g.appendChild(el("circle", { cx:x, cy:y, r:6, fill:"#fff", stroke:"#111", "stroke-width":2 }));
+    } else {
+      g.appendChild(el("circle", { cx:x, cy:y, r:4, fill: colorOf[serving[0]], stroke:"#0e1219", "stroke-width":1.5 }));
+    }
+    // unsichtbarer größerer Trefferbereich
+    g.appendChild(el("circle", { cx:x, cy:y, r:11, fill:"transparent" }));
+
+    g.addEventListener("mousemove", evt => showTooltip(evt, name, serving));
+    g.addEventListener("mouseleave", hideTooltip);
+    stationLayer.appendChild(g);
+
+    // Beschriftung für Umsteige- und Endbahnhöfe
+    const isTerminus = LINES.some(l => l.stations[0]===name || l.stations[l.stations.length-1]===name);
+    if ((isInterchange || isTerminus) && visible) {
+      const t = el("text", {
+        x: x+8, y: y-7, fill:"#cdd6e2", "font-size":10, "font-weight": isInterchange?600:400,
+        "paint-order":"stroke", stroke:"#0e1219", "stroke-width":3, "stroke-linejoin":"round"
+      });
+      t.textContent = name;
+      labelLayer.appendChild(t);
+    }
+  });
+  svg.appendChild(stationLayer);
+  svg.appendChild(labelLayer);
+
+  // Ebene für die fahrenden Züge (immer obenauf)
+  trainLayer = el("g", { id:"trainLayer" });
+  svg.appendChild(trainLayer);
+  mountTrainEls();
+}
+
+/* ---------- Tooltip ---------- */
+function showTooltip(evt, name, serving) {
+  const rect = svg.getBoundingClientRect();
+  tooltip.style.display = "block";
+  tooltip.style.left = (evt.clientX - rect.left + 14) + "px";
+  tooltip.style.top  = (evt.clientY - rect.top + 14) + "px";
+  const badges = serving.map(id =>
+    `<span class="mini-badge" style="background:${colorOf[id]}">${id}</span>`).join("");
+  tooltip.innerHTML = `<b>${name}</b><div class="tt-lines">${badges}</div>`;
+}
+function hideTooltip(){ tooltip.style.display = "none"; }
+
+/* ---------- Sidebar-Buttons ---------- */
+const lineButtons = document.getElementById("lineButtons");
+LINES.forEach(line => {
+  const from = line.stations[0];
+  const to = line.stations[line.stations.length-1];
+  const btn = document.createElement("button");
+  btn.className = "line-btn";
+  btn.innerHTML = `
+    <span class="badge" style="background:${line.color}">${line.id}</span>
+    <span>
+      <span class="line-name">${from} ↔ ${to}</span><br>
+      <span class="line-route">${line.stations.length} Stationen</span>
+    </span>`;
+  btn.addEventListener("click", () => selectLine(line.id));
+  lineButtons.appendChild(btn);
+});
+document.getElementById("showAll").addEventListener("click", () => selectLine(null));
+
+function selectLine(id) {
+  activeLine = id;
+  document.querySelectorAll(".line-btn").forEach(b => b.classList.remove("active"));
+  if (id === null) {
+    document.getElementById("showAll").classList.add("active");
+  } else {
+    const idx = LINES.findIndex(l => l.id === id);
+    lineButtons.children[idx].classList.add("active");
+  }
+  buildTrains();   // Zugfahrten für die sichtbare(n) Linie(n) erzeugen
+  render();        // render() hängt die Zug-Ebene an und mountet die Züge
+  renderInfo(id);
+  document.getElementById("liveLabel").textContent =
+    id ? `Live-Züge · Linie ${id}` : "Live-Züge · alle Linien";
+}
+
+/* ----------------------------------------------------------------------
+   Live-Zug-Simulation
+   Züge fahren entlang der Liniensegmente, halten kurz an jeder Station
+   und wenden an den Endbahnhöfen – in beide Richtungen, im realistischen
+   Takt. (Simulation, keine echten GPS-Daten der BVG.)
+---------------------------------------------------------------------- */
+let trains = [];
+let trainLayer = null;
+let running = true;
+let speedMult = 1.2;
+const DWELL = 0.4;          // Haltezeit an Stationen (Sek., bei Tempo 1)
+const BASE_SPEED = 34;      // Einheiten pro Sekunde
+
+function buildTrains() {
+  trains = [];
+  const ids = activeLine ? [activeLine] : LINES.map(l => l.id);
+  ids.forEach(id => {
+    const line = LINES.find(l => l.id === id);
+    const pts = line.stations.map(s => STATIONS[s]).filter(Boolean);
+    const segs = []; let tot = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const ax=pts[i][0], ay=pts[i][1], bx=pts[i+1][0], by=pts[i+1][1];
+      const len = Math.hypot(bx-ax, by-ay) || 0.001;
+      segs.push({ ax, ay, bx, by, len }); tot += len;
+    }
+    if (!segs.length) return;
+    const count = Math.max(2, Math.round(tot / 150));
+    for (let k = 0; k < count; k++) {
+      const dir = k % 2 === 0 ? 1 : -1;
+      let acc = (k / count) * tot, segIdx = 0;
+      while (segIdx < segs.length - 1 && acc > segs[segIdx].len) { acc -= segs[segIdx].len; segIdx++; }
+      const t = Math.min(1, acc / segs[segIdx].len);
+      trains.push({ lineId:id, color:line.color, segs, segIdx, t, dir, state:"move", timer:0 });
+    }
+  });
+}
+
+function mountTrainEls() {
+  if (!trainLayer) return;
+  trains.forEach(tr => {
+    const g = el("g", { class:"train" });
+    g.appendChild(el("circle", { r:6, fill:"#fff", stroke:"#0e1219", "stroke-width":1.5 }));
+    g.appendChild(el("circle", { r:4, fill: tr.color }));
+    tr.el = g;
+    positionTrain(tr);
+    trainLayer.appendChild(g);
+  });
+}
+
+function positionTrain(tr) {
+  const s = tr.segs[tr.segIdx];
+  const x = s.ax + (s.bx - s.ax) * tr.t;
+  const y = s.ay + (s.by - s.ay) * tr.t;
+  if (tr.el) tr.el.setAttribute("transform", `translate(${x.toFixed(2)},${y.toFixed(2)})`);
+}
+
+function updateTrain(tr, dt) {
+  if (tr.state === "dwell") { tr.timer -= dt; if (tr.timer <= 0) tr.state = "move"; return; }
+  const seg = tr.segs[tr.segIdx];
+  tr.t += tr.dir * (BASE_SPEED * dt / seg.len);
+  if (tr.dir > 0 && tr.t >= 1) {            // Station am Segmentende erreicht
+    tr.t = 1; tr.state = "dwell"; tr.timer = DWELL;
+    if (tr.segIdx < tr.segs.length - 1) { tr.segIdx++; tr.t = 0; }
+    else tr.dir = -1;                       // Endbahnhof → wenden
+  } else if (tr.dir < 0 && tr.t <= 0) {
+    tr.t = 0; tr.state = "dwell"; tr.timer = DWELL;
+    if (tr.segIdx > 0) { tr.segIdx--; tr.t = 1; }
+    else tr.dir = 1;                        // Endbahnhof → wenden
+  }
+}
+
+let lastTs = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - lastTs) / 1000); lastTs = now;
+  if (running) trains.forEach(tr => updateTrain(tr, dt * speedMult));
+  trains.forEach(positionTrain);
+  requestAnimationFrame(frame);
+}
+
+/* Steuerung */
+document.getElementById("playPause").addEventListener("click", e => {
+  running = !running;
+  e.currentTarget.textContent = running ? "⏸︎" : "▶︎";
+});
+document.getElementById("speed").addEventListener("input", e => {
+  speedMult = parseFloat(e.target.value);
+});
+
+/* ---------- Info-Panel ---------- */
+const info = document.getElementById("info");
+function renderInfo(id) {
+  if (id === null) {
+    info.innerHTML = `<p class="hint">Es werden alle 9 U-Bahn-Linien angezeigt.
+      Wähle links eine Linie, um ihren genauen Verlauf und alle Halte zu sehen.<br><br>
+      Das Berliner U-Bahn-Netz umfasst die Linien U1 bis U9 mit insgesamt
+      ${Object.keys(STATIONS).length} hier dargestellten Bahnhöfen.</p>`;
+    return;
+  }
+  const line = LINES.find(l => l.id === id);
+  const from = line.stations[0], to = line.stations[line.stations.length-1];
+  const items = line.stations.map(s => {
+    const others = (stationLines[s] || []).filter(x => x !== id);
+    const tags = others.map(o =>
+      `<span class="mini-badge" style="background:${colorOf[o]}">${o}</span>`).join("");
+    return `<li>
+      <span class="dot" style="background:${line.color}"></span>
+      <span>${s}</span>
+      ${tags ? `<span class="interchange-tag">${tags}</span>` : ""}
+    </li>`;
+  }).join("");
+  info.innerHTML = `
+    <h2><span class="badge" style="background:${line.color}">${id}</span> Linie ${id}</h2>
+    <p class="endpoints">Fährt von <b>${from}</b><br>nach <b>${to}</b><br>
+      (${line.stations.length} Stationen, beide Richtungen)</p>
+    <ul class="station-list">${items}</ul>`;
+}
+
+/* ---------- Zoom & Pan ---------- */
+let vb = { x:0, y:0, w:1000, h:720 };
+function applyVB(){ svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); }
+function zoom(factor, cx, cy){
+  const nw = vb.w * factor, nh = vb.h * factor;
+  if (nw < 200 || nw > 2000) return;
+  vb.x = cx - (cx - vb.x) * factor;
+  vb.y = cy - (cy - vb.y) * factor;
+  vb.w = nw; vb.h = nh; applyVB();
+}
+document.getElementById("zoomIn").onclick  = () => zoom(0.8, vb.x+vb.w/2, vb.y+vb.h/2);
+document.getElementById("zoomOut").onclick = () => zoom(1.25, vb.x+vb.w/2, vb.y+vb.h/2);
+document.getElementById("zoomReset").onclick = () => { vb={x:0,y:0,w:1000,h:720}; applyVB(); };
+svg.addEventListener("wheel", e => {
+  e.preventDefault();
+  const rect = svg.getBoundingClientRect();
+  const cx = vb.x + (e.clientX-rect.left)/rect.width  * vb.w;
+  const cy = vb.y + (e.clientY-rect.top )/rect.height * vb.h;
+  zoom(e.deltaY > 0 ? 1.12 : 0.89, cx, cy);
+}, { passive:false });
+let dragging=false, last=null;
+svg.addEventListener("mousedown", e => { dragging=true; last={x:e.clientX,y:e.clientY}; svg.classList.add("dragging"); });
+window.addEventListener("mouseup", () => { dragging=false; svg.classList.remove("dragging"); });
+window.addEventListener("mousemove", e => {
+  if(!dragging) return;
+  const rect = svg.getBoundingClientRect();
+  vb.x -= (e.clientX-last.x)/rect.width  * vb.w;
+  vb.y -= (e.clientY-last.y)/rect.height * vb.h;
+  last={x:e.clientX,y:e.clientY}; applyVB();
+});
+
+/* ---------- Start ---------- */
+selectLine("U6");                 // erst eine Linie zeigen – mit fahrenden Zügen
+requestAnimationFrame(frame);     // Live-Animation starten
+</script>
+</body>
+</html>
