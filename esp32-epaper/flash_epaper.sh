@@ -26,8 +26,8 @@ arduino-cli config add board_manager.additional_urls "$URL" >/dev/null 2>&1 || t
 arduino-cli core update-index --additional-urls "$URL"
 arduino-cli core install esp32:esp32 --additional-urls "$URL" || true
 
-echo "== 3/6  E-Paper-Bibliothek GxEPD2 installieren =="
-arduino-cli lib install "GxEPD2" || true
+echo "== 3/6  Grafik-Bibliothek installieren =="
+arduino-cli lib install "Adafruit GFX Library" || true
 
 echo "== 4/6  ESP32-S3-Port finden =="
 PORT="${1:-}"

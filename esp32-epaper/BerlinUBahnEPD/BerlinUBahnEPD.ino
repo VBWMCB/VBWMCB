@@ -1,37 +1,125 @@
 /*
- * Berliner U-Bahn auf dem ESP32-S3 E-Paper 1.54" (200x200, Schwarz/Weiss)
- * -----------------------------------------------------------------------
- * Zeigt der Reihe nach jede U-Bahn-Linie (U1..U9): grosse Liniennummer,
- * Start- und Zielbahnhof ("von / nach"), Stationszahl und eine
- * schematische Strecke. Wechselt automatisch alle ~15 Sekunden weiter.
+ * Berliner U-Bahn auf dem Waveshare ESP32-S3 E-Paper 1.54" (200x200 s/w)
+ * ----------------------------------------------------------------------
+ * Zeigt nacheinander jede Linie U1..U9 (grosse Nummer, von/nach,
+ * Stationszahl, schematische Strecke) und wechselt alle ~15 s weiter.
  *
- * Board:      "ESP32S3 Dev Module"  (Arduino IDE)
- * Panel:      Waveshare 1.54" 200x200 s/w (Controller SSD1681)
- * Bibliothek: GxEPD2 (installiert automatisch Adafruit GFX + BusIO)
- * Pins:       aus Waveshares offizieller user_config.h fuer dieses Board.
+ * Der E-Paper-Treiber ist 1:1 Waveshares eigenem Code fuer dieses Board
+ * nachgebaut (eigene SPI-Ansteuerung, exakte Befehlsfolge + Waveform-LUT),
+ * weil das Panel eine eigene LUT braucht und Standardbibliotheken es nicht
+ * korrekt ansprechen. Gezeichnet wird in einen GFXcanvas1 (Adafruit GFX).
  *
- * Falls das Display leer bleibt: siehe Hinweis unten bei DISPLAY-TYP.
+ * Board: "ESP32S3 Dev Module". Bibliothek: Adafruit GFX Library.
+ * Pins/Befehle: waveshareteam/ESP32-S3-ePaper-1.54 (epaper_driver_bsp.cpp).
  */
-#include <GxEPD2_BW.h>
+#include <Arduino.h>
+#include <SPI.h>
+#include <Adafruit_GFX.h>
 
 // ---- Pins dieses Boards (aus Waveshare user_config.h) ----
-#define EPD_PWR   6    // schaltet die Display-Stromversorgung
-#define EPD_BUSY  8
+#define EPD_PWR   6    // Display-Strom: LOW = EIN, HIGH = AUS
+#define EPD_BUSY  8    // HIGH = beschaeftigt
 #define EPD_RST   9
 #define EPD_DC    10
 #define EPD_CS    11
 #define EPD_SCK   12
 #define EPD_MOSI  13
 
-// ---- DISPLAY-TYP ----
-// Standard fuer das aktuelle 1.54"-200x200-Modul ist SSD1681 (GxEPD2_154_D67).
-// Bleibt der Schirm leer, ersetze GxEPD2_154_D67 durch GxEPD2_154 (aelteres Panel).
-GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> display(
-    GxEPD2_154_D67(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
+#define EPD_W 200
+#define EPD_H 200
+#define EPD_ROW_BYTES (EPD_W / 8)        // 25
+#define EPD_BUF_LEN (EPD_ROW_BYTES * EPD_H)  // 5000
 
+#define INK 1   // gezeichnet (wird schwarz)
+#define BG  0   // Hintergrund (wird weiss)
+
+GFXcanvas1 canvas(EPD_W, EPD_H);
+SPISettings spiSet(4000000, MSBFIRST, SPI_MODE0);
+
+// Waveform-LUT fuer den vollen Bildaufbau (aus Waveshares epaper_driver_bsp.cpp)
+const uint8_t WF_Full_1IN54[159] = {
+  0x80,0x48,0x40,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+  0x40,0x48,0x80,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+  0x80,0x48,0x40,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+  0x40,0x48,0x80,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+  0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+  0x0A,0x00,0x00,0x00,0x00,0x00,0x00,
+  0x08,0x01,0x00,0x08,0x01,0x00,0x02,
+  0x0A,0x00,0x00,0x00,0x00,0x00,0x00,
+  0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+  0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+  0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+  0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+  0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+  0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+  0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+  0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+  0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+  0x22,0x22,0x22,0x22,0x22,0x22,0x00,0x00,0x00,
+  0x22,0x17,0x41,0x00,0x32,0x20
+};
+
+// ---------- Low-Level E-Paper (Waveshare-kompatibel) ----------
+static inline void epdCmd(uint8_t c)  { digitalWrite(EPD_DC, LOW);  digitalWrite(EPD_CS, LOW); SPI.transfer(c); digitalWrite(EPD_CS, HIGH); }
+static inline void epdData(uint8_t d) { digitalWrite(EPD_DC, HIGH); digitalWrite(EPD_CS, LOW); SPI.transfer(d); digitalWrite(EPD_CS, HIGH); }
+
+void epdWrite(const uint8_t *buf, int len, bool invert) {
+  digitalWrite(EPD_DC, HIGH);
+  digitalWrite(EPD_CS, LOW);
+  for (int i = 0; i < len; i++) SPI.transfer(invert ? (uint8_t)~buf[i] : buf[i]);
+  digitalWrite(EPD_CS, HIGH);
+}
+
+void epdBusy() { while (digitalRead(EPD_BUSY) == HIGH) delay(5); }
+
+void epdReset() {
+  digitalWrite(EPD_RST, HIGH); delay(50);
+  digitalWrite(EPD_RST, LOW);  delay(20);
+  digitalWrite(EPD_RST, HIGH); delay(50);
+}
+
+void epdSetWindows(uint16_t Xs, uint16_t Ys, uint16_t Xe, uint16_t Ye) {
+  epdCmd(0x44); epdData((Xs >> 3) & 0xFF); epdData((Xe >> 3) & 0xFF);
+  epdCmd(0x45); epdData(Ys & 0xFF); epdData((Ys >> 8) & 0xFF); epdData(Ye & 0xFF); epdData((Ye >> 8) & 0xFF);
+}
+void epdSetCursor(uint16_t Xs, uint16_t Ys) {
+  epdCmd(0x4E); epdData(Xs & 0xFF);
+  epdCmd(0x4F); epdData(Ys & 0xFF); epdData((Ys >> 8) & 0xFF);
+}
+void epdSetLut(const uint8_t *lut) {
+  epdCmd(0x32); epdWrite(lut, 153, false); epdBusy();
+  epdCmd(0x3F); epdData(lut[153]);
+  epdCmd(0x03); epdData(lut[154]);
+  epdCmd(0x04); epdData(lut[155]); epdData(lut[156]); epdData(lut[157]);
+  epdCmd(0x2C); epdData(lut[158]);
+}
+void epdInit() {
+  epdReset();
+  epdBusy();
+  epdCmd(0x12); epdBusy();                       // SWRESET
+  epdCmd(0x01); epdData(0xC7); epdData(0x00); epdData(0x01);  // driver output
+  epdCmd(0x11); epdData(0x01);                   // data entry
+  epdSetWindows(0, EPD_W - 1, EPD_H - 1, 0);
+  epdCmd(0x3C); epdData(0x01);                   // border
+  epdCmd(0x18); epdData(0x80);                   // temp sensor
+  epdCmd(0x22); epdData(0xB1); epdCmd(0x20);     // load temp/waveform
+  epdSetCursor(0, EPD_H - 1);
+  epdBusy();
+  epdSetLut(WF_Full_1IN54);
+}
+void epdTurnOn() { epdCmd(0x22); epdData(0xC7); epdCmd(0x20); epdBusy(); }
+
+void epdShowCanvas() {
+  epdSetWindows(0, EPD_W - 1, EPD_H - 1, 0);
+  epdSetCursor(0, EPD_H - 1);
+  epdCmd(0x24);
+  // Canvas: Bit1 = Tinte. Panel: Bit1 = weiss. Also invertiert senden.
+  epdWrite(canvas.getBuffer(), EPD_BUF_LEN, true);
+  epdTurnOn();
+}
+
+// ---------- U-Bahn-Daten ----------
 struct Line { const char *num; const char *from; const char *to; int stops; };
-
-// Umlaute bewusst als ae/oe/ue/ss - der Standard-Font kann keine Umlaute.
 Line lines[] = {
   {"U1", "Uhlandstrasse",   "Warschauer Str.",  13},
   {"U2", "Ruhleben",        "Pankow",           29},
@@ -46,69 +134,62 @@ Line lines[] = {
 const int LINE_COUNT = sizeof(lines) / sizeof(lines[0]);
 int idx = 0;
 
-void drawScreen(const Line &L) {
-  display.setFullWindow();
-  display.firstPage();
-  do {
-    display.fillScreen(GxEPD_WHITE);
+void drawLine(const Line &L) {
+  canvas.fillScreen(BG);
 
-    // Linien-Badge oben links
-    display.fillRoundRect(8, 8, 60, 38, 5, GxEPD_BLACK);
-    display.setTextColor(GxEPD_WHITE);
-    display.setTextSize(3);
-    display.setCursor(16, 16);
-    display.print(L.num);
+  // Linien-Badge (schwarz, weisse Schrift)
+  canvas.fillRoundRect(8, 8, 60, 38, 5, INK);
+  canvas.setTextColor(BG);
+  canvas.setTextSize(3);
+  canvas.setCursor(16, 16);
+  canvas.print(L.num);
 
-    // Kopfzeile
-    display.setTextColor(GxEPD_BLACK);
-    display.setTextSize(1);
-    display.setCursor(78, 14); display.print("BERLIN");
-    display.setCursor(78, 28); display.print("U-BAHN");
-    display.drawLine(8, 52, 192, 52, GxEPD_BLACK);
+  // Kopfzeile
+  canvas.setTextColor(INK);
+  canvas.setTextSize(1);
+  canvas.setCursor(78, 14); canvas.print("BERLIN");
+  canvas.setCursor(78, 28); canvas.print("U-BAHN");
+  canvas.drawLine(8, 52, 192, 52, INK);
 
-    // Schematische Strecke (senkrecht, links)
-    const int x = 22, yTop = 74, yBot = 166;
-    display.drawLine(x, yTop, x, yBot, GxEPD_BLACK);
-    display.drawLine(x + 1, yTop, x + 1, yBot, GxEPD_BLACK);
-    for (int k = 0; k < L.stops; k++) {
-      int y = yTop + (long)(yBot - yTop) * k / (L.stops - 1);
-      display.drawCircle(x, y, 2, GxEPD_BLACK);
-    }
-    display.fillCircle(x, yTop, 5, GxEPD_BLACK);   // Start
-    display.fillCircle(x, yBot, 5, GxEPD_BLACK);   // Ziel
+  // Schematische Strecke (senkrecht, links)
+  const int x = 22, yTop = 74, yBot = 166;
+  canvas.drawLine(x, yTop, x, yBot, INK);
+  canvas.drawLine(x + 1, yTop, x + 1, yBot, INK);
+  for (int k = 0; k < L.stops; k++) {
+    int y = yTop + (long)(yBot - yTop) * k / (L.stops - 1);
+    canvas.drawCircle(x, y, 2, INK);
+  }
+  canvas.fillCircle(x, yTop, 5, INK);
+  canvas.fillCircle(x, yBot, 5, INK);
 
-    // Beschriftung
-    display.setTextSize(1);
-    display.setCursor(36, 62);  display.print("von");
-    display.setCursor(36, 73);  display.print(L.from);
-    display.setCursor(36, 150); display.print("nach");
-    display.setCursor(36, 161); display.print(L.to);
+  // Beschriftung
+  canvas.setCursor(36, 62);  canvas.print("von");
+  canvas.setCursor(36, 73);  canvas.print(L.from);
+  canvas.setCursor(36, 150); canvas.print("nach");
+  canvas.setCursor(36, 161); canvas.print(L.to);
+  canvas.setCursor(8, 184);  canvas.print(L.stops); canvas.print(" Stationen");
 
-    display.setCursor(8, 184);
-    display.print(L.stops); display.print(" Stationen");
-  } while (display.nextPage());
+  epdShowCanvas();
 }
 
 void setup() {
   Serial.begin(115200);
 
-  pinMode(EPD_PWR, OUTPUT);
-  digitalWrite(EPD_PWR, LOW);    // Display EIN (dieses Board: LOW=an, HIGH=aus!)
-  delay(100);
+  pinMode(EPD_PWR, OUTPUT); digitalWrite(EPD_PWR, LOW); delay(100);  // Display EIN
+  pinMode(EPD_CS, OUTPUT);  digitalWrite(EPD_CS, HIGH);
+  pinMode(EPD_DC, OUTPUT);
+  pinMode(EPD_RST, OUTPUT);
+  pinMode(EPD_BUSY, INPUT);
 
-  // WICHTIG: erst init() (GxEPD2 ruft intern SPI.begin() mit Standard-Pins auf),
-  // DANACH SPI auf die echten Board-Pins umlegen - sonst gehen die Daten
-  // an die falschen Pins und das Panel bleibt unveraendert.
-  display.init(115200);
-  SPI.end();
-  SPI.begin(EPD_SCK, -1, EPD_MOSI, EPD_CS);   // MISO nicht genutzt -> -1
-  display.setRotation(0);
+  SPI.begin(EPD_SCK, -1, EPD_MOSI, -1);   // CS/DC von Hand gesteuert
+  SPI.beginTransaction(spiSet);
 
-  drawScreen(lines[idx]);
+  epdInit();
+  drawLine(lines[idx]);
 }
 
 void loop() {
-  delay(15000);                        // ~15 s pro Linie
+  delay(15000);
   idx = (idx + 1) % LINE_COUNT;
-  drawScreen(lines[idx]);
+  drawLine(lines[idx]);
 }
