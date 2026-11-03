@@ -15,6 +15,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <Adafruit_GFX.h>
+#include "lines_geo.h"   // GEO[]: Linienverlaeufe fuer die Karten-Ansicht
 
 // ---- Pins dieses Boards (aus Waveshare user_config.h) ----
 #define EPD_PWR   6    // Display-Strom: LOW = EIN, HIGH = AUS
@@ -175,6 +176,58 @@ void renderLine(int i) {
   epdShowCanvas();
 }
 
+// ---------- Karten-Ansicht (geografischer Linienverlauf) ----------
+void drawDotted(int x0, int y0, int x1, int y1) {
+  int dx = abs(x1 - x0), dy = abs(y1 - y0);
+  int steps = max(dx, dy);
+  if (steps == 0) { canvas.drawPixel(x0, y0, INK); return; }
+  for (int i = 0; i <= steps; i += 2) {
+    int x = x0 + (long)(x1 - x0) * i / steps;
+    int y = y0 + (long)(y1 - y0) * i / steps;
+    canvas.drawPixel(x, y, INK);
+  }
+}
+void drawGeo(const GeoLine &g, bool thick, bool dotted) {
+  for (uint8_t k = 0; k + 1 < g.n; k++) {
+    int x0 = pgm_read_byte(&g.pts[2 * k]),     y0 = pgm_read_byte(&g.pts[2 * k + 1]);
+    int x1 = pgm_read_byte(&g.pts[2 * k + 2]), y1 = pgm_read_byte(&g.pts[2 * k + 3]);
+    if (dotted) { drawDotted(x0, y0, x1, y1); continue; }
+    canvas.drawLine(x0, y0, x1, y1, INK);
+    if (thick) {
+      canvas.drawLine(x0, y0 + 1, x1, y1 + 1, INK);
+      canvas.drawLine(x0 + 1, y0, x1 + 1, y1, INK);
+    }
+  }
+}
+void renderMap(int i) {
+  canvas.fillScreen(BG);
+  for (int l = 0; l < LINE_COUNT; l++)          // uebrige Linien gepunktet
+    if (l != i) drawGeo(GEO[l], false, true);
+  drawGeo(GEO[i], true, false);                 // aktive Linie dick
+
+  const GeoLine &g = GEO[i];
+  for (uint8_t k = 0; k < g.n; k++)
+    canvas.fillCircle(pgm_read_byte(&g.pts[2 * k]), pgm_read_byte(&g.pts[2 * k + 1]), 1, INK);
+  canvas.fillCircle(pgm_read_byte(&g.pts[0]), pgm_read_byte(&g.pts[1]), 3, INK);
+  canvas.fillCircle(pgm_read_byte(&g.pts[2 * (g.n - 1)]), pgm_read_byte(&g.pts[2 * (g.n - 1) + 1]), 3, INK);
+
+  canvas.fillRoundRect(4, 4, 52, 30, 5, INK);   // Badge
+  canvas.setTextColor(BG); canvas.setTextSize(2); canvas.setCursor(10, 11); canvas.print(lines[i].num);
+  canvas.setTextColor(INK); canvas.setTextSize(1);
+  canvas.setCursor(62, 8);  canvas.print("Netzplan");
+  canvas.setCursor(62, 20); canvas.print("Berlin");
+  epdShowCanvas();
+}
+
+// Anzeige abwechselnd: 0 = Info-Text, 1 = Karte
+int phase = 0;
+void showCurrent() { if (phase == 0) renderLine(idx); else renderMap(idx); }
+void advance() {
+  phase++;
+  if (phase > 1) { phase = 0; idx = (idx + 1) % LINE_COUNT; }
+  showCurrent();
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -189,21 +242,19 @@ void setup() {
   SPI.beginTransaction(spiSet);
 
   epdInit();
-  renderLine(idx);
+  showCurrent();
 }
 
 void loop() {
-  // bis zu 15 s auf der aktuellen Linie bleiben - oder sofort weiter bei BOOT
+  // ~12 s pro Ansicht - oder sofort weiter bei BOOT
   unsigned long start = millis();
-  while (millis() - start < 15000) {
+  while (millis() - start < 12000) {
     if (digitalRead(BTN_BOOT) == LOW) {       // Taste gedrueckt
-      idx = (idx + 1) % LINE_COUNT;
-      renderLine(idx);
+      advance();
       start = millis();
       while (digitalRead(BTN_BOOT) == LOW) delay(10);  // warten bis losgelassen
     }
     delay(20);
   }
-  idx = (idx + 1) % LINE_COUNT;
-  renderLine(idx);
+  advance();
 }
