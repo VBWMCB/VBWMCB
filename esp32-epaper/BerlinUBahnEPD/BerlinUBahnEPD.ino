@@ -15,7 +15,9 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <Adafruit_GFX.h>
-#include <Fonts/FreeSansBold12pt7b.h>   // schoene, proportionale Schrift fuer Namen
+#include <Fonts/FreeSans9pt7b.h>        // einheitliche Schriftfamilie: Labels
+#include <Fonts/FreeSansBold12pt7b.h>   // Stationsnamen
+#include <Fonts/FreeSansBold18pt7b.h>   // Linien-Badge
 #include "lines_geo.h"   // GEO[]: Linienverlaeufe fuer die Karten-Ansicht
 
 // ---- Pins dieses Boards (aus Waveshare user_config.h) ----
@@ -141,32 +143,31 @@ void renderLine(int i) {
   const Line &L = lines[i];
   canvas.fillScreen(BG);
 
-  // Grosses Linien-Badge (klassische Schrift, weiss auf schwarz)
-  canvas.setFont(NULL);
-  canvas.fillRoundRect(6, 4, 72, 50, 7, INK);
+  // Einheitliche Typografie: FreeSans-Familie, buendiger linker Rand (x=6)
+  canvas.setTextSize(1);
+  canvas.setTextWrap(true);
+
+  // Linien-Badge
+  canvas.fillRoundRect(6, 4, 66, 48, 7, INK);
+  canvas.setFont(&FreeSansBold18pt7b);
   canvas.setTextColor(BG);
-  canvas.setTextSize(4);
-  canvas.setCursor(14, 13);
+  canvas.setCursor(17, 39);
   canvas.print(L.num);
 
   // Stationszahl rechts neben dem Badge
   canvas.setTextColor(INK);
-  canvas.setTextSize(2); canvas.setCursor(92, 10); canvas.print(L.stops);
-  canvas.setTextSize(1); canvas.setCursor(92, 32); canvas.print("Stationen");
+  canvas.setFont(&FreeSansBold12pt7b); canvas.setCursor(84, 25); canvas.print(L.stops);
+  canvas.setFont(&FreeSans9pt7b);      canvas.setCursor(84, 45); canvas.print("Stationen");
 
-  // von / nach - Namen in FreeSansBold (mit Zeilenumbruch)
-  canvas.setTextWrap(true);
-  canvas.setTextColor(INK);
-  canvas.setFont(NULL);
-  canvas.setTextSize(2); canvas.setCursor(6, 64); canvas.print("von");
-  canvas.setFont(&FreeSansBold12pt7b);           // y = Grundlinie
-  canvas.setTextSize(1); canvas.setCursor(4, 92); canvas.print(L.from);
-  canvas.setFont(NULL);
-  canvas.setTextSize(2); canvas.setCursor(6, 130); canvas.print("nach");
-  canvas.setFont(&FreeSansBold12pt7b);
-  canvas.setCursor(4, 162); canvas.print(L.to);
-  canvas.setFont(NULL);
+  canvas.drawLine(6, 60, 193, 60, INK);
 
+  // von / nach
+  canvas.setFont(&FreeSans9pt7b);      canvas.setCursor(6, 78);  canvas.print("von");
+  canvas.setFont(&FreeSansBold12pt7b); canvas.setCursor(6, 100); canvas.print(L.from);
+  canvas.setFont(&FreeSans9pt7b);      canvas.setCursor(6, 150); canvas.print("nach");
+  canvas.setFont(&FreeSansBold12pt7b); canvas.setCursor(6, 172); canvas.print(L.to);
+
+  canvas.setFont(NULL);
   epdShowCanvas();
 }
 
@@ -206,11 +207,13 @@ void renderMap(int i) {
   canvas.fillCircle(pgm_read_byte(&g.pts[0]), pgm_read_byte(&g.pts[1]), 3, INK);
   canvas.fillCircle(pgm_read_byte(&g.pts[2 * (g.n - 1)]), pgm_read_byte(&g.pts[2 * (g.n - 1) + 1]), 3, INK);
 
-  canvas.fillRoundRect(4, 4, 52, 30, 5, INK);   // Badge
-  canvas.setTextColor(BG); canvas.setTextSize(2); canvas.setCursor(10, 11); canvas.print(lines[i].num);
-  canvas.setTextColor(INK); canvas.setTextSize(1);
-  canvas.setCursor(62, 8);  canvas.print("Netzplan");
-  canvas.setCursor(62, 20); canvas.print("Berlin");
+  canvas.setTextSize(1);
+  canvas.fillRoundRect(4, 4, 46, 30, 5, INK);   // Badge
+  canvas.setFont(&FreeSansBold12pt7b);
+  canvas.setTextColor(BG);  canvas.setCursor(9, 26);  canvas.print(lines[i].num);
+  canvas.setTextColor(INK); canvas.setFont(&FreeSans9pt7b);
+  canvas.setCursor(56, 24); canvas.print("Netzplan");
+  canvas.setFont(NULL);
   epdShowCanvas();
 }
 
