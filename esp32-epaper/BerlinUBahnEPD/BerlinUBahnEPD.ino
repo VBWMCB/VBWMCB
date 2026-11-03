@@ -160,7 +160,7 @@ int drawClock() {                 // zeichnet HH:MM oben rechts, gibt linke Kant
   int16_t bx, by; uint16_t bw, bh;
   canvas.getTextBounds(buf, 0, 0, &bx, &by, &bw, &bh);
   int x = 196 - bw;
-  canvas.setCursor(x, 40); canvas.print(buf);
+  canvas.setCursor(x, 18); canvas.print(buf);   // eigene Zeile oben rechts
   return x;
 }
 
@@ -239,19 +239,19 @@ void renderDepartures(int i) {
   canvas.fillScreen(BG);
   canvas.setTextColor(INK); canvas.setTextWrap(false); canvas.setTextSize(1);
 
-  // Kopf: Uhr zuerst (reserviert Platz), dann Stationsname gekuerzt daneben
-  int clockLeft = drawClock();
+  // Kopf: Uhr in eigener Zeile oben rechts, Stationsname darunter (volle Breite)
+  drawClock();
   canvas.setFont(&FreeSansBold12pt7b); canvas.setTextColor(INK);
   String nm = stations[i].name;
-  int maxW = clockLeft - 4 - 8;        // Platz bis zur Uhr, mit Abstand
+  int maxW = 192;                      // volle Breite, nur Stationsname
   int16_t bx, by; uint16_t tw, th;
   canvas.getTextBounds(nm.c_str(), 0, 0, &bx, &by, &tw, &th);
   while (tw > maxW && nm.length() > 1) {
     nm.remove(nm.length() - 1);
     canvas.getTextBounds(nm.c_str(), 0, 0, &bx, &by, &tw, &th);
   }
-  canvas.setCursor(4, 40); canvas.print(nm);
-  canvas.drawLine(4, 48, 196, 48, INK);
+  canvas.setCursor(4, 46); canvas.print(nm);
+  canvas.drawLine(4, 54, 196, 54, INK);
 
   if (depCount == 0) {
     canvas.setFont(&FreeSans9pt7b); canvas.setCursor(4, 60);
@@ -259,7 +259,7 @@ void renderDepartures(int i) {
     canvas.setFont(NULL); epdShowCanvas(); return;
   }
 
-  const int rowTop = 58, rh = 34, bw2 = 42, bh2 = 24;
+  const int rowTop = 64, rh = 33, bw2 = 42, bh2 = 24;
   int16_t bx, by; uint16_t tw, th;
   for (int k = 0; k < depCount && k < 4; k++) {
     int yt = rowTop + k * rh;
