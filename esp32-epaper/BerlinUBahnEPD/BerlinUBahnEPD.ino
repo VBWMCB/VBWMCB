@@ -160,7 +160,7 @@ int drawClock() {                 // zeichnet HH:MM oben rechts, gibt linke Kant
   int16_t bx, by; uint16_t bw, bh;
   canvas.getTextBounds(buf, 0, 0, &bx, &by, &bw, &bh);
   int x = 196 - bw;
-  canvas.setCursor(x, 20); canvas.print(buf);
+  canvas.setCursor(x, 40); canvas.print(buf);
   return x;
 }
 
@@ -250,8 +250,8 @@ void renderDepartures(int i) {
     nm.remove(nm.length() - 1);
     canvas.getTextBounds(nm.c_str(), 0, 0, &bx, &by, &tw, &th);
   }
-  canvas.setCursor(4, 20); canvas.print(nm);
-  canvas.drawLine(4, 28, 196, 28, INK);
+  canvas.setCursor(4, 40); canvas.print(nm);
+  canvas.drawLine(4, 48, 196, 48, INK);
 
   if (depCount == 0) {
     canvas.setFont(&FreeSans9pt7b); canvas.setCursor(4, 60);
@@ -259,7 +259,7 @@ void renderDepartures(int i) {
     canvas.setFont(NULL); epdShowCanvas(); return;
   }
 
-  const int rowTop = 38, rh = 34, bw2 = 42, bh2 = 24;
+  const int rowTop = 58, rh = 34, bw2 = 42, bh2 = 24;
   int16_t bx, by; uint16_t tw, th;
   for (int k = 0; k < depCount && k < 4; k++) {
     int yt = rowTop + k * rh;
