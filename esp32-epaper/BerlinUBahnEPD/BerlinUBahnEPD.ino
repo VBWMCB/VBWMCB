@@ -140,38 +140,25 @@ void renderLine(int i) {
   const Line &L = lines[i];
   canvas.fillScreen(BG);
 
-  // Grosses Linien-Badge (schwarz, weisse Schrift)
-  canvas.fillRoundRect(6, 6, 84, 58, 7, INK);
+  // Sehr grosses Linien-Badge (schwarz, weisse Schrift)
+  canvas.fillRoundRect(6, 4, 82, 56, 8, INK);
   canvas.setTextColor(BG);
-  canvas.setTextSize(4);
-  canvas.setCursor(17, 18);
+  canvas.setTextSize(5);
+  canvas.setCursor(14, 12);
   canvas.print(L.num);
 
-  // Kopf rechts
+  // Stationszahl rechts neben dem Badge
   canvas.setTextColor(INK);
-  canvas.setTextSize(1);
-  canvas.setCursor(100, 14); canvas.print("BERLIN");
-  canvas.setCursor(100, 28); canvas.print("U-BAHN");
-  canvas.setCursor(100, 48); canvas.print(L.stops); canvas.print(" Stat.");
+  canvas.setTextSize(3); canvas.setCursor(100, 10); canvas.print(L.stops);
+  canvas.setTextSize(1); canvas.setCursor(100, 40); canvas.print("Stationen");
 
-  canvas.drawLine(6, 72, 194, 72, INK);
-
-  // von / nach - gross (Textgroesse 2)
-  canvas.setTextSize(1); canvas.setCursor(6, 80);  canvas.print("VON");
-  canvas.setTextSize(2); canvas.setCursor(6, 92);  canvas.print(L.from);
-  canvas.setTextSize(1); canvas.setCursor(6, 124); canvas.print("NACH");
-  canvas.setTextSize(2); canvas.setCursor(6, 136); canvas.print(L.to);
-
-  // Strecke unten (waagerecht), Endbahnhoefe als dicke Punkte
-  const int y = 182, x0 = 12, x1 = 188;
-  canvas.drawLine(x0, y, x1, y, INK);
-  canvas.drawLine(x0, y + 1, x1, y + 1, INK);
-  for (int k = 0; k < L.stops; k++) {
-    int x = x0 + (long)(x1 - x0) * k / (L.stops - 1);
-    canvas.fillCircle(x, y, 1, INK);
-  }
-  canvas.fillCircle(x0, y, 4, INK);
-  canvas.fillCircle(x1, y, 4, INK);
+  // von / nach - grosse Namen (Textgroesse 3, mit Zeilenumbruch)
+  canvas.setTextWrap(true);
+  canvas.setTextColor(INK);
+  canvas.setTextSize(2); canvas.setCursor(6, 66);  canvas.print("von");
+  canvas.setTextSize(3); canvas.setCursor(6, 84);  canvas.print(L.from);
+  canvas.setTextSize(2); canvas.setCursor(6, 130); canvas.print("nach");
+  canvas.setTextSize(3); canvas.setCursor(6, 148); canvas.print(L.to);
 
   epdShowCanvas();
 }
