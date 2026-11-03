@@ -96,11 +96,12 @@ void setup() {
   digitalWrite(EPD_PWR, LOW);    // Display EIN (dieses Board: LOW=an, HIGH=aus!)
   delay(100);
 
-  // SPI auf die Pins dieses Boards legen (MISO nicht genutzt -> -1)
-  SPI.end();
-  SPI.begin(EPD_SCK, -1, EPD_MOSI, EPD_CS);
-
+  // WICHTIG: erst init() (GxEPD2 ruft intern SPI.begin() mit Standard-Pins auf),
+  // DANACH SPI auf die echten Board-Pins umlegen - sonst gehen die Daten
+  // an die falschen Pins und das Panel bleibt unveraendert.
   display.init(115200);
+  SPI.end();
+  SPI.begin(EPD_SCK, -1, EPD_MOSI, EPD_CS);   // MISO nicht genutzt -> -1
   display.setRotation(0);
 
   drawScreen(lines[idx]);
