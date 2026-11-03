@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # Flasher fuer das Waveshare ESP32-S3 E-Paper 1.54" (macOS).
-# Installiert arduino-cli + ESP32-Core + Bibliotheken, fragt dein WLAN ab,
-# kompiliert und flasht die LIVE-Abfahrten-Anzeige.
+# Installiert arduino-cli + ESP32-Core + Bibliotheken, kompiliert und flasht
+# die LIVE-Abfahrten-Anzeige. Das WLAN wird NICHT hier eingetippt, sondern
+# nach dem Start bequem am Handy eingerichtet (Portal "Berlin-UBahn-Setup").
 #
 #   Aufruf im Repo-Ordner:   bash esp32-epaper/flash_epaper.sh   [optional: PORT]
 #
@@ -12,48 +13,26 @@ FQBN="esp32:esp32:esp32s3"
 URL="https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json"
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKETCH="$DIR/BerlinUBahnEPD"
-INO="$SKETCH/BerlinUBahnEPD.ino"
 
-echo "== 1/7  arduino-cli pruefen =="
+echo "== 1/6  arduino-cli pruefen =="
 if ! command -v arduino-cli >/dev/null 2>&1; then
   command -v brew >/dev/null 2>&1 || { echo "FEHLER: Homebrew fehlt: https://brew.sh"; exit 1; }
   brew install arduino-cli
 fi
 arduino-cli version
 
-echo "== 2/7  ESP32-Core installieren (einmalig) =="
+echo "== 2/6  ESP32-Core installieren (einmalig) =="
 arduino-cli config init >/dev/null 2>&1 || true
 arduino-cli config add board_manager.additional_urls "$URL" >/dev/null 2>&1 || true
 arduino-cli core update-index --additional-urls "$URL"
 arduino-cli core install esp32:esp32 --additional-urls "$URL" || true
 
-echo "== 3/7  Bibliotheken installieren =="
+echo "== 3/6  Bibliotheken installieren =="
 arduino-cli lib install "Adafruit GFX Library" || true
 arduino-cli lib install "ArduinoJson" || true
+arduino-cli lib install "WiFiManager" || true
 
-echo "== 4/7  WLAN-Zugangsdaten =="
-if grep -q '__WIFI_SSID1__' "$INO"; then
-  echo "  Netz 1:"
-  read -r -p "    WLAN-Name (SSID): " SSID1
-  read -r -s -p "    Passwort:         " PASS1; echo
-  echo "  Netz 2 (optional - bei ENTER ueberspringen):"
-  read -r -p "    WLAN-Name (SSID): " SSID2
-  if [ -n "$SSID2" ]; then read -r -s -p "    Passwort:         " PASS2; echo; else PASS2=""; fi
-  cp "$INO" "$INO.bak"
-  # nach dem Flashen Platzhalter wiederherstellen -> git bleibt sauber
-  trap 'mv -f "$INO.bak" "$INO" 2>/dev/null || true' EXIT
-  # Sonderzeichen fuer sed-Ersetzung absichern (\ & |)
-  esc() { printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'; }
-  SSID1=$(esc "$SSID1"); PASS1=$(esc "$PASS1"); SSID2=$(esc "$SSID2"); PASS2=$(esc "$PASS2")
-  sed -i '' \
-    -e "s|__WIFI_SSID1__|$SSID1|" -e "s|__WIFI_PASS1__|$PASS1|" \
-    -e "s|__WIFI_SSID2__|$SSID2|" -e "s|__WIFI_PASS2__|$PASS2|" "$INO"
-  echo "  eingetragen (nur fuer diesen Flash; Datei wird danach zurueckgesetzt)."
-else
-  echo "  WLAN scheint schon eingetragen - ok."
-fi
-
-echo "== 5/7  ESP32-S3-Port finden =="
+echo "== 4/6  ESP32-S3-Port finden =="
 PORT="${1:-}"
 if [ -z "$PORT" ]; then
   PORT="$(ls /dev/cu.* 2>/dev/null | grep -Ei 'usbmodem|usbserial|wchusbserial|SLAB' | head -n1 || true)"
@@ -67,12 +46,15 @@ if [ -z "$PORT" ]; then
 fi
 echo "  benutze Port: $PORT"
 
-echo "== 6/7  kompilieren =="
+echo "== 5/6  kompilieren =="
 arduino-cli compile -b "$FQBN" "$SKETCH"
 
-echo "== 7/7  flashen =="
+echo "== 6/6  flashen =="
 arduino-cli upload -p "$PORT" -b "$FQBN" "$SKETCH"
 
 echo
-echo "Fertig! Der ESP waehlt sich ins WLAN ein und zeigt die LIVE-Abfahrten."
-echo "(Kein WLAN? Dann steht es auf dem Display - SSID/Passwort pruefen.)"
+echo "Fertig! WLAN einrichten am Handy:"
+echo "  1) Am Handy ins WLAN 'Berlin-UBahn-Setup' gehen."
+echo "  2) Die Seite oeffnet sich automatisch -> dein WLAN waehlen + Passwort eingeben."
+echo "  3) ESP merkt sich das und zeigt dann die LIVE-Abfahrten."
+echo "WLAN spaeter neu einrichten: beim Einschalten die BOOT-Taste gedrueckt halten."

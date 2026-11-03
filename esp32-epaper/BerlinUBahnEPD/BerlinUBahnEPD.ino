@@ -14,7 +14,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <WiFi.h>
-#include <WiFiMulti.h>
+#include <WiFiManager.h>          // komfortables WLAN-Setup-Portal am Handy
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
@@ -23,14 +23,9 @@
 #include <Fonts/FreeSans9pt7b.h>
 #include <Fonts/FreeSansBold12pt7b.h>
 
-// ====== DEINE WLANs (Flash-Skript fuellt das lokal) ======
-// Bis zu zwei Netze - er nimmt automatisch das verfuegbare.
-const char *WIFI_SSID1 = "__WIFI_SSID1__";
-const char *WIFI_PASS1 = "__WIFI_PASS1__";
-const char *WIFI_SSID2 = "__WIFI_SSID2__";   // optional (leer lassen ok)
-const char *WIFI_PASS2 = "__WIFI_PASS2__";
-// =========================================================
-WiFiMulti wifiMulti;
+// WLAN wird NICHT im Code hinterlegt, sondern komfortabel am Handy
+// eingerichtet (WiFiManager-Portal "Berlin-UBahn-Setup").
+#define SETUP_AP_NAME "Berlin-UBahn-Setup"
 
 // ---- Pins dieses Boards (Waveshare user_config.h) ----
 #define EPD_PWR   6
@@ -305,17 +300,18 @@ void setup() {
   SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
   epdInit();
 
-  renderMessage("Berlin U-Bahn", "Verbinde WLAN ...");
+  // BOOT beim Start gedrueckt -> gespeichertes WLAN loeschen (neu einrichten)
+  WiFiManager wm;
+  if (digitalRead(BTN_BOOT) == LOW) wm.resetSettings();
 
-  WiFi.mode(WIFI_STA);
-  auto usable = [](const char *s, const char *tag) {
-    return s[0] != '\0' && strcmp(s, tag) != 0;
-  };
-  if (usable(WIFI_SSID1, "__WIFI_SSID1__")) wifiMulti.addAP(WIFI_SSID1, WIFI_PASS1);
-  if (usable(WIFI_SSID2, "__WIFI_SSID2__")) wifiMulti.addAP(WIFI_SSID2, WIFI_PASS2);
-  unsigned long t0 = millis();
-  while (wifiMulti.run() != WL_CONNECTED && millis() - t0 < 20000) delay(250);
-  wifiOK = (WiFi.status() == WL_CONNECTED);
+  // Falls kein WLAN gespeichert/erreichbar: Portal oeffnen (Hinweis anzeigen)
+  if (WiFi.SSID() == "") {
+    renderMessage("WLAN einrichten", "Handy -> WLAN 'Berlin-UBahn-Setup', dann Netz waehlen");
+  } else {
+    renderMessage("Berlin U-Bahn", "Verbinde WLAN ...");
+  }
+  wm.setConfigPortalTimeout(180);          // 3 Min Zeit zum Einrichten
+  wifiOK = wm.autoConnect(SETUP_AP_NAME);  // verbindet oder oeffnet Setup-Portal
 
   if (wifiOK) {
     configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.google.com");
