@@ -14,6 +14,7 @@
  */
 #include <Arduino.h>
 #include <SPI.h>
+#include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Fonts/FreeSans9pt7b.h>        // einheitliche Schriftfamilie: Labels
 #include <Fonts/FreeSansBold12pt7b.h>   // Stationsnamen
@@ -40,6 +41,46 @@
 
 GFXcanvas1 canvas(EPD_W, EPD_H);
 SPISettings spiSet(4000000, MSBFIRST, SPI_MODE0);
+
+// ---------- Echtzeituhr PCF85063 (I2C) ----------
+#define I2C_SDA   47
+#define I2C_SCL   48
+#define RTC_ADDR  0x51
+static inline uint8_t bcd2dec(uint8_t b) { return (b >> 4) * 10 + (b & 0x0F); }
+static inline uint8_t dec2bcd(uint8_t d) { return ((d / 10) << 4) | (d % 10); }
+
+void rtcSetFromBuildTime() {
+  // Zeit = Kompilierzeitpunkt (__TIME__ = "HH:MM:SS")
+  uint8_t hh = (__TIME__[0] - '0') * 10 + (__TIME__[1] - '0');
+  uint8_t mm = (__TIME__[3] - '0') * 10 + (__TIME__[4] - '0');
+  uint8_t ss = (__TIME__[6] - '0') * 10 + (__TIME__[7] - '0');
+  Wire.beginTransmission(RTC_ADDR); Wire.write(0x00); Wire.write(0x00); Wire.endTransmission(); // Control_1: laufen, 24h
+  Wire.beginTransmission(RTC_ADDR);
+  Wire.write(0x04);                 // ab Register Sekunden
+  Wire.write(dec2bcd(ss) & 0x7F);
+  Wire.write(dec2bcd(mm));
+  Wire.write(dec2bcd(hh) & 0x3F);
+  Wire.endTransmission();
+}
+bool rtcRead(int &hh, int &mm) {
+  Wire.beginTransmission(RTC_ADDR); Wire.write(0x04);
+  if (Wire.endTransmission(false) != 0) return false;
+  if (Wire.requestFrom(RTC_ADDR, 3) != 3) return false;
+  Wire.read();                      // Sekunden verwerfen
+  uint8_t m = Wire.read(), h = Wire.read();
+  mm = bcd2dec(m & 0x7F); hh = bcd2dec(h & 0x3F);
+  return (hh < 24 && mm < 60);
+}
+void drawClock() {                  // HH:MM oben rechts
+  int hh, mm;
+  if (!rtcRead(hh, mm)) return;
+  char buf[6]; snprintf(buf, sizeof(buf), "%02d:%02d", hh, mm);
+  canvas.setFont(&FreeSans9pt7b); canvas.setTextColor(INK); canvas.setTextSize(1);
+  int16_t bx, by; uint16_t bw, bh;
+  canvas.getTextBounds(buf, 0, 0, &bx, &by, &bw, &bh);
+  canvas.setCursor(193 - bw, 16); canvas.print(buf);
+  canvas.setFont(NULL);
+}
 
 // Waveform-LUT fuer den vollen Bildaufbau (aus Waveshares epaper_driver_bsp.cpp)
 const uint8_t WF_Full_1IN54[159] = {
@@ -167,6 +208,7 @@ void renderLine(int i) {
   canvas.setFont(&FreeSans9pt7b);      canvas.setCursor(6, 150); canvas.print("nach");
   canvas.setFont(&FreeSansBold12pt7b); canvas.setCursor(6, 172); canvas.print(L.to);
 
+  drawClock();
   canvas.setFont(NULL);
   epdShowCanvas();
 }
@@ -213,6 +255,7 @@ void renderMap(int i) {
   canvas.setTextColor(BG);  canvas.setCursor(9, 26);  canvas.print(lines[i].num);
   canvas.setTextColor(INK); canvas.setFont(&FreeSans9pt7b);
   canvas.setCursor(56, 24); canvas.print("Netzplan");
+  drawClock();
   canvas.setFont(NULL);
   epdShowCanvas();
 }
@@ -238,6 +281,9 @@ void setup() {
 
   SPI.begin(EPD_SCK, -1, EPD_MOSI, -1);   // CS/DC von Hand gesteuert
   SPI.beginTransaction(spiSet);
+
+  Wire.begin(I2C_SDA, I2C_SCL);           // Echtzeituhr
+  rtcSetFromBuildTime();                  // Zeit auf Kompilierzeitpunkt stellen
 
   epdInit();
   showCurrent();
