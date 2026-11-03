@@ -93,7 +93,7 @@ void setup() {
   Serial.begin(115200);
 
   pinMode(EPD_PWR, OUTPUT);
-  digitalWrite(EPD_PWR, HIGH);   // Display mit Strom versorgen
+  digitalWrite(EPD_PWR, LOW);    // Display EIN (dieses Board: LOW=an, HIGH=aus!)
   delay(100);
 
   // SPI auf die Pins dieses Boards legen (MISO nicht genutzt -> -1)
