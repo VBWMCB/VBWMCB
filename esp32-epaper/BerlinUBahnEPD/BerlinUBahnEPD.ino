@@ -134,7 +134,8 @@ Line lines[] = {
 const int LINE_COUNT = sizeof(lines) / sizeof(lines[0]);
 int idx = 0;
 
-void drawLine(const Line &L) {
+void renderLine(int i) {
+  const Line &L = lines[i];
   canvas.fillScreen(BG);
 
   // Linien-Badge (schwarz, weisse Schrift)
@@ -185,11 +186,11 @@ void setup() {
   SPI.beginTransaction(spiSet);
 
   epdInit();
-  drawLine(lines[idx]);
+  renderLine(idx);
 }
 
 void loop() {
   delay(15000);
   idx = (idx + 1) % LINE_COUNT;
-  drawLine(lines[idx]);
+  renderLine(idx);
 }
