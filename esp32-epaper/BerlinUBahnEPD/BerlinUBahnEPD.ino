@@ -15,6 +15,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <Adafruit_GFX.h>
+#include <Fonts/FreeSansBold12pt7b.h>   // schoene, proportionale Schrift fuer Namen
 #include "lines_geo.h"   // GEO[]: Linienverlaeufe fuer die Karten-Ansicht
 
 // ---- Pins dieses Boards (aus Waveshare user_config.h) ----
@@ -140,25 +141,31 @@ void renderLine(int i) {
   const Line &L = lines[i];
   canvas.fillScreen(BG);
 
-  // Sehr grosses Linien-Badge (schwarz, weisse Schrift)
-  canvas.fillRoundRect(6, 4, 82, 56, 8, INK);
+  // Grosses Linien-Badge (klassische Schrift, weiss auf schwarz)
+  canvas.setFont(NULL);
+  canvas.fillRoundRect(6, 4, 72, 50, 7, INK);
   canvas.setTextColor(BG);
-  canvas.setTextSize(5);
-  canvas.setCursor(14, 12);
+  canvas.setTextSize(4);
+  canvas.setCursor(14, 13);
   canvas.print(L.num);
 
   // Stationszahl rechts neben dem Badge
   canvas.setTextColor(INK);
-  canvas.setTextSize(3); canvas.setCursor(100, 10); canvas.print(L.stops);
-  canvas.setTextSize(1); canvas.setCursor(100, 40); canvas.print("Stationen");
+  canvas.setTextSize(2); canvas.setCursor(92, 10); canvas.print(L.stops);
+  canvas.setTextSize(1); canvas.setCursor(92, 32); canvas.print("Stationen");
 
-  // von / nach - grosse Namen (Textgroesse 3, mit Zeilenumbruch)
+  // von / nach - Namen in FreeSansBold (mit Zeilenumbruch)
   canvas.setTextWrap(true);
   canvas.setTextColor(INK);
-  canvas.setTextSize(2); canvas.setCursor(6, 66);  canvas.print("von");
-  canvas.setTextSize(3); canvas.setCursor(6, 84);  canvas.print(L.from);
+  canvas.setFont(NULL);
+  canvas.setTextSize(2); canvas.setCursor(6, 64); canvas.print("von");
+  canvas.setFont(&FreeSansBold12pt7b);           // y = Grundlinie
+  canvas.setTextSize(1); canvas.setCursor(4, 92); canvas.print(L.from);
+  canvas.setFont(NULL);
   canvas.setTextSize(2); canvas.setCursor(6, 130); canvas.print("nach");
-  canvas.setTextSize(3); canvas.setCursor(6, 148); canvas.print(L.to);
+  canvas.setFont(&FreeSansBold12pt7b);
+  canvas.setCursor(4, 162); canvas.print(L.to);
+  canvas.setFont(NULL);
 
   epdShowCanvas();
 }
@@ -187,6 +194,7 @@ void drawGeo(const GeoLine &g, bool thick, bool dotted) {
   }
 }
 void renderMap(int i) {
+  canvas.setFont(NULL);
   canvas.fillScreen(BG);
   for (int l = 0; l < LINE_COUNT; l++)          // uebrige Linien gepunktet
     if (l != i) drawGeo(GEO[l], false, true);
