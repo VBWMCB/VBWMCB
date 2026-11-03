@@ -259,10 +259,9 @@ void renderDepartures(int i) {
     if (d.length() > 13) d = d.substring(0, 12) + ".";
     canvas.setCursor(42, y); canvas.print(d);                   // Richtung
     char mb[8];
-    if (dep[k].mins >= 0 && dep[k].mins <= 99)
-      (dep[k].mins == 0) ? strcpy(mb, "jetzt") : snprintf(mb, sizeof(mb), "%d'", dep[k].mins);
-    else
-      snprintf(mb, sizeof(mb), "%s", dep[k].when.c_str());      // sonst Uhrzeit
+    if (dep[k].mins == 0)                      strcpy(mb, "jetzt");
+    else if (dep[k].mins > 0 && dep[k].mins <= 99) snprintf(mb, sizeof(mb), "%d'", dep[k].mins);
+    else                                       snprintf(mb, sizeof(mb), "%s", dep[k].when.c_str()); // sonst Uhrzeit
     int16_t bx, by; uint16_t bw, bh;
     canvas.getTextBounds(mb, 0, 0, &bx, &by, &bw, &bh);
     canvas.setCursor(198 - bw, y); canvas.print(mb);            // Minuten rechtsbuendig
