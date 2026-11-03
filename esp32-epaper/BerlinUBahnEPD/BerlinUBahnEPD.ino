@@ -151,15 +151,17 @@ int minsUntil(const String &iso) {
   if (diff < -60) diff += 1440;
   return diff;
 }
-void drawClock() {
-  if (!timeSynced()) return;
+int drawClock() {                 // zeichnet HH:MM oben rechts, gibt linke Kante zurueck
+  if (!timeSynced()) return 200;  // keine Uhr -> volle Breite frei
   time_t now = time(nullptr);
   struct tm lt; localtime_r(&now, &lt);
   char buf[6]; snprintf(buf, sizeof(buf), "%02d:%02d", lt.tm_hour, lt.tm_min);
   canvas.setFont(&FreeSans9pt7b); canvas.setTextColor(INK);
   int16_t bx, by; uint16_t bw, bh;
   canvas.getTextBounds(buf, 0, 0, &bx, &by, &bw, &bh);
-  canvas.setCursor(196 - bw, 15); canvas.print(buf);
+  int x = 196 - bw;
+  canvas.setCursor(x, 20); canvas.print(buf);
+  return x;
 }
 
 // ---------- HTTP / API ----------
@@ -237,9 +239,18 @@ void renderDepartures(int i) {
   canvas.fillScreen(BG);
   canvas.setTextColor(INK); canvas.setTextWrap(false); canvas.setTextSize(1);
 
-  // Kopf: Stationsname + Uhr
-  canvas.setFont(&FreeSansBold12pt7b); canvas.setCursor(4, 20); canvas.print(stations[i].name);
-  drawClock();
+  // Kopf: Uhr zuerst (reserviert Platz), dann Stationsname gekuerzt daneben
+  int clockLeft = drawClock();
+  canvas.setFont(&FreeSansBold12pt7b); canvas.setTextColor(INK);
+  String nm = stations[i].name;
+  int maxW = clockLeft - 4 - 8;        // Platz bis zur Uhr, mit Abstand
+  int16_t bx, by; uint16_t tw, th;
+  canvas.getTextBounds(nm.c_str(), 0, 0, &bx, &by, &tw, &th);
+  while (tw > maxW && nm.length() > 1) {
+    nm.remove(nm.length() - 1);
+    canvas.getTextBounds(nm.c_str(), 0, 0, &bx, &by, &tw, &th);
+  }
+  canvas.setCursor(4, 20); canvas.print(nm);
   canvas.drawLine(4, 28, 196, 28, INK);
 
   if (depCount == 0) {
