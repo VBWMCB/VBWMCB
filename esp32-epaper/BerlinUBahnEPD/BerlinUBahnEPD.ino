@@ -21,6 +21,7 @@
 #include <time.h>
 #include <Adafruit_GFX.h>
 #include <Fonts/FreeSans9pt7b.h>
+#include <Fonts/FreeSansBold9pt7b.h>
 #include <Fonts/FreeSansBold12pt7b.h>
 
 // WLAN wird NICHT im Code hinterlegt, sondern komfortabel am Handy
@@ -241,26 +242,38 @@ void renderDepartures(int i) {
   drawClock();
   canvas.drawLine(4, 28, 196, 28, INK);
 
-  canvas.setFont(&FreeSans9pt7b);
   if (depCount == 0) {
-    canvas.setCursor(4, 60);
+    canvas.setFont(&FreeSans9pt7b); canvas.setCursor(4, 60);
     canvas.print(wifiOK ? "keine Abfahrten" : "kein WLAN");
     canvas.setFont(NULL); epdShowCanvas(); return;
   }
-  int y = 50;
-  for (int k = 0; k < depCount && k < 5; k++) {
-    canvas.setCursor(2, y); canvas.print(dep[k].line);          // z.B. U8
+
+  const int rowTop = 38, rh = 34, bw2 = 42, bh2 = 24;
+  int16_t bx, by; uint16_t tw, th;
+  for (int k = 0; k < depCount && k < 4; k++) {
+    int yt = rowTop + k * rh;
+
+    // Linien-Badge (wie frueher: weiss auf schwarz, abgerundet)
+    canvas.fillRoundRect(2, yt, bw2, bh2, 5, INK);
+    canvas.setFont(&FreeSansBold9pt7b); canvas.setTextColor(BG);
+    canvas.getTextBounds(dep[k].line.c_str(), 0, 0, &bx, &by, &tw, &th);
+    canvas.setCursor(2 + (bw2 - tw) / 2, yt + 17); canvas.print(dep[k].line);
+    canvas.setTextColor(INK);
+
+    // Ziel
+    canvas.setFont(&FreeSans9pt7b);
     String d = dep[k].dir;
-    if (d.length() > 13) d = d.substring(0, 12) + ".";
-    canvas.setCursor(42, y); canvas.print(d);                   // Richtung
+    if (d.length() > 12) d = d.substring(0, 11) + ".";
+    canvas.setCursor(50, yt + 17); canvas.print(d);
+
+    // Minuten rechtsbuendig
     char mb[8];
-    if (dep[k].mins == 0)                      strcpy(mb, "jetzt");
+    if (dep[k].mins == 0)                          strcpy(mb, "jetzt");
     else if (dep[k].mins > 0 && dep[k].mins <= 99) snprintf(mb, sizeof(mb), "%d'", dep[k].mins);
-    else                                       snprintf(mb, sizeof(mb), "%s", dep[k].when.c_str()); // sonst Uhrzeit
-    int16_t bx, by; uint16_t bw, bh;
-    canvas.getTextBounds(mb, 0, 0, &bx, &by, &bw, &bh);
-    canvas.setCursor(198 - bw, y); canvas.print(mb);            // Minuten rechtsbuendig
-    y += 30;
+    else                                           snprintf(mb, sizeof(mb), "%s", dep[k].when.c_str());
+    canvas.setFont(&FreeSansBold9pt7b);
+    canvas.getTextBounds(mb, 0, 0, &bx, &by, &tw, &th);
+    canvas.setCursor(198 - tw, yt + 17); canvas.print(mb);
   }
   canvas.setFont(NULL);
   epdShowCanvas();
