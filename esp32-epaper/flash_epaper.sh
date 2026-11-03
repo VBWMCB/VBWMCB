@@ -42,6 +42,9 @@ if grep -q '__WIFI_SSID1__' "$INO"; then
   cp "$INO" "$INO.bak"
   # nach dem Flashen Platzhalter wiederherstellen -> git bleibt sauber
   trap 'mv -f "$INO.bak" "$INO" 2>/dev/null || true' EXIT
+  # Sonderzeichen fuer sed-Ersetzung absichern (\ & |)
+  esc() { printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'; }
+  SSID1=$(esc "$SSID1"); PASS1=$(esc "$PASS1"); SSID2=$(esc "$SSID2"); PASS2=$(esc "$PASS2")
   sed -i '' \
     -e "s|__WIFI_SSID1__|$SSID1|" -e "s|__WIFI_PASS1__|$PASS1|" \
     -e "s|__WIFI_SSID2__|$SSID2|" -e "s|__WIFI_PASS2__|$PASS2|" "$INO"

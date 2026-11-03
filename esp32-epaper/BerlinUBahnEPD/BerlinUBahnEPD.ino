@@ -271,8 +271,23 @@ void renderDepartures(int i) {
   epdShowCanvas();
 }
 
-void showStation(int i) {
-  renderDepartures(i);   // alte Daten/Platzhalter sofort zeigen waere moeglich; wir holen frisch:
+void renderWifiFail() {   // zeigt gefundene Netze -> ist das eigene 2,4-GHz-Netz dabei?
+  canvas.setFont(NULL); canvas.fillScreen(BG);
+  canvas.setTextColor(INK); canvas.setTextWrap(false);
+  canvas.setFont(&FreeSansBold12pt7b); canvas.setCursor(4, 20); canvas.print("Kein WLAN");
+  canvas.drawLine(4, 28, 196, 28, INK);
+  canvas.setFont(&FreeSans9pt7b);
+  canvas.setCursor(4, 44); canvas.print("Netze in Reichweite:");
+  int n = WiFi.scanNetworks();
+  int y = 64;
+  for (int i = 0; i < n && i < 6; i++) {
+    String s = WiFi.SSID(i);
+    if (s.length() > 20) s = s.substring(0, 19) + ".";
+    canvas.setCursor(4, y); canvas.print(s);
+    y += 20;
+  }
+  if (n <= 0) { canvas.setCursor(4, 64); canvas.print("(keine gefunden)"); }
+  epdShowCanvas();
 }
 
 // ---------- Setup / Loop ----------
@@ -311,7 +326,7 @@ void setup() {
     fetchDepartures(idx);
     renderDepartures(idx);
   } else {
-    renderMessage("Kein WLAN!", "SSID/Passwort pruefen");
+    renderWifiFail();
   }
 }
 
