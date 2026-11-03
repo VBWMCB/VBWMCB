@@ -24,6 +24,7 @@
 #define EPD_CS    11
 #define EPD_SCK   12
 #define EPD_MOSI  13
+#define BTN_BOOT  0    // BOOT-Taste zum Weiterschalten der Linie
 
 #define EPD_W 200
 #define EPD_H 200
@@ -138,37 +139,38 @@ void renderLine(int i) {
   const Line &L = lines[i];
   canvas.fillScreen(BG);
 
-  // Linien-Badge (schwarz, weisse Schrift)
-  canvas.fillRoundRect(8, 8, 60, 38, 5, INK);
+  // Grosses Linien-Badge (schwarz, weisse Schrift)
+  canvas.fillRoundRect(6, 6, 84, 58, 7, INK);
   canvas.setTextColor(BG);
-  canvas.setTextSize(3);
-  canvas.setCursor(16, 16);
+  canvas.setTextSize(4);
+  canvas.setCursor(17, 18);
   canvas.print(L.num);
 
-  // Kopfzeile
+  // Kopf rechts
   canvas.setTextColor(INK);
   canvas.setTextSize(1);
-  canvas.setCursor(78, 14); canvas.print("BERLIN");
-  canvas.setCursor(78, 28); canvas.print("U-BAHN");
-  canvas.drawLine(8, 52, 192, 52, INK);
+  canvas.setCursor(100, 14); canvas.print("BERLIN");
+  canvas.setCursor(100, 28); canvas.print("U-BAHN");
+  canvas.setCursor(100, 48); canvas.print(L.stops); canvas.print(" Stat.");
 
-  // Schematische Strecke (senkrecht, links)
-  const int x = 22, yTop = 74, yBot = 166;
-  canvas.drawLine(x, yTop, x, yBot, INK);
-  canvas.drawLine(x + 1, yTop, x + 1, yBot, INK);
+  canvas.drawLine(6, 72, 194, 72, INK);
+
+  // von / nach - gross (Textgroesse 2)
+  canvas.setTextSize(1); canvas.setCursor(6, 80);  canvas.print("VON");
+  canvas.setTextSize(2); canvas.setCursor(6, 92);  canvas.print(L.from);
+  canvas.setTextSize(1); canvas.setCursor(6, 124); canvas.print("NACH");
+  canvas.setTextSize(2); canvas.setCursor(6, 136); canvas.print(L.to);
+
+  // Strecke unten (waagerecht), Endbahnhoefe als dicke Punkte
+  const int y = 182, x0 = 12, x1 = 188;
+  canvas.drawLine(x0, y, x1, y, INK);
+  canvas.drawLine(x0, y + 1, x1, y + 1, INK);
   for (int k = 0; k < L.stops; k++) {
-    int y = yTop + (long)(yBot - yTop) * k / (L.stops - 1);
-    canvas.drawCircle(x, y, 2, INK);
+    int x = x0 + (long)(x1 - x0) * k / (L.stops - 1);
+    canvas.fillCircle(x, y, 1, INK);
   }
-  canvas.fillCircle(x, yTop, 5, INK);
-  canvas.fillCircle(x, yBot, 5, INK);
-
-  // Beschriftung
-  canvas.setCursor(36, 62);  canvas.print("von");
-  canvas.setCursor(36, 73);  canvas.print(L.from);
-  canvas.setCursor(36, 150); canvas.print("nach");
-  canvas.setCursor(36, 161); canvas.print(L.to);
-  canvas.setCursor(8, 184);  canvas.print(L.stops); canvas.print(" Stationen");
+  canvas.fillCircle(x0, y, 4, INK);
+  canvas.fillCircle(x1, y, 4, INK);
 
   epdShowCanvas();
 }
@@ -181,6 +183,7 @@ void setup() {
   pinMode(EPD_DC, OUTPUT);
   pinMode(EPD_RST, OUTPUT);
   pinMode(EPD_BUSY, INPUT);
+  pinMode(BTN_BOOT, INPUT_PULLUP);   // BOOT-Taste: naechste Linie
 
   SPI.begin(EPD_SCK, -1, EPD_MOSI, -1);   // CS/DC von Hand gesteuert
   SPI.beginTransaction(spiSet);
@@ -190,7 +193,17 @@ void setup() {
 }
 
 void loop() {
-  delay(15000);
+  // bis zu 15 s auf der aktuellen Linie bleiben - oder sofort weiter bei BOOT
+  unsigned long start = millis();
+  while (millis() - start < 15000) {
+    if (digitalRead(BTN_BOOT) == LOW) {       // Taste gedrueckt
+      idx = (idx + 1) % LINE_COUNT;
+      renderLine(idx);
+      start = millis();
+      while (digitalRead(BTN_BOOT) == LOW) delay(10);  // warten bis losgelassen
+    }
+    delay(20);
+  }
   idx = (idx + 1) % LINE_COUNT;
   renderLine(idx);
 }
