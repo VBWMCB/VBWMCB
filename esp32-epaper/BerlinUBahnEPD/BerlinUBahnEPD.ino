@@ -14,6 +14,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <WiFi.h>
+#include <WiFiMulti.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
@@ -22,10 +23,14 @@
 #include <Fonts/FreeSans9pt7b.h>
 #include <Fonts/FreeSansBold12pt7b.h>
 
-// ====== HIER DEIN WLAN (Flash-Skript fuellt das lokal) ======
-const char *WIFI_SSID = "__WIFI_SSID__";
-const char *WIFI_PASS = "__WIFI_PASS__";
-// ============================================================
+// ====== DEINE WLANs (Flash-Skript fuellt das lokal) ======
+// Bis zu zwei Netze - er nimmt automatisch das verfuegbare.
+const char *WIFI_SSID1 = "__WIFI_SSID1__";
+const char *WIFI_PASS1 = "__WIFI_PASS1__";
+const char *WIFI_SSID2 = "__WIFI_SSID2__";   // optional (leer lassen ok)
+const char *WIFI_PASS2 = "__WIFI_PASS2__";
+// =========================================================
+WiFiMulti wifiMulti;
 
 // ---- Pins dieses Boards (Waveshare user_config.h) ----
 #define EPD_PWR   6
@@ -289,9 +294,13 @@ void setup() {
   renderMessage("Berlin U-Bahn", "Verbinde WLAN ...");
 
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  auto usable = [](const char *s, const char *tag) {
+    return s[0] != '\0' && strcmp(s, tag) != 0;
+  };
+  if (usable(WIFI_SSID1, "__WIFI_SSID1__")) wifiMulti.addAP(WIFI_SSID1, WIFI_PASS1);
+  if (usable(WIFI_SSID2, "__WIFI_SSID2__")) wifiMulti.addAP(WIFI_SSID2, WIFI_PASS2);
   unsigned long t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) delay(250);
+  while (wifiMulti.run() != WL_CONNECTED && millis() - t0 < 20000) delay(250);
   wifiOK = (WiFi.status() == WL_CONNECTED);
 
   if (wifiOK) {

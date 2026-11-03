@@ -32,13 +32,19 @@ arduino-cli lib install "Adafruit GFX Library" || true
 arduino-cli lib install "ArduinoJson" || true
 
 echo "== 4/7  WLAN-Zugangsdaten =="
-if grep -q '__WIFI_SSID__' "$INO"; then
-  read -r -p "  WLAN-Name (SSID): " SSID
-  read -r -s -p "  WLAN-Passwort:    " PASS; echo
+if grep -q '__WIFI_SSID1__' "$INO"; then
+  echo "  Netz 1:"
+  read -r -p "    WLAN-Name (SSID): " SSID1
+  read -r -s -p "    Passwort:         " PASS1; echo
+  echo "  Netz 2 (optional - bei ENTER ueberspringen):"
+  read -r -p "    WLAN-Name (SSID): " SSID2
+  if [ -n "$SSID2" ]; then read -r -s -p "    Passwort:         " PASS2; echo; else PASS2=""; fi
   cp "$INO" "$INO.bak"
   # nach dem Flashen Platzhalter wiederherstellen -> git bleibt sauber
   trap 'mv -f "$INO.bak" "$INO" 2>/dev/null || true' EXIT
-  sed -i '' "s|__WIFI_SSID__|$SSID|; s|__WIFI_PASS__|$PASS|" "$INO"
+  sed -i '' \
+    -e "s|__WIFI_SSID1__|$SSID1|" -e "s|__WIFI_PASS1__|$PASS1|" \
+    -e "s|__WIFI_SSID2__|$SSID2|" -e "s|__WIFI_PASS2__|$PASS2|" "$INO"
   echo "  eingetragen (nur fuer diesen Flash; Datei wird danach zurueckgesetzt)."
 else
   echo "  WLAN scheint schon eingetragen - ok."
